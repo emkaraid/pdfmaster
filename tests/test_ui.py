@@ -399,3 +399,37 @@ def test_ui_ruler_relabels_when_scale_arrives(ui, tmp_path):
     assert tab.side.measure.result.text() == want
     texts = [it.text() for it in tool.done[-1]["items"] if isinstance(it, QGraphicsSimpleTextItem)]
     assert texts == [want]
+
+
+def test_ui_stamp_click_does_not_repeat_after_place_or_esc(ui, fx, tmp_path):
+    """После постановки — режим «Выбор», повторный клик и Esc+клик не ставят вторую печать."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    from pdfmaster.core import images
+    app, ctx, win = ui
+    tab, path = open_copy(app, win, fx["act"], tmp_path)
+    view = tab.view
+    png = images.to_png(images.remove_background(images.open_image(open(fx["stamp"], "rb").read())))
+    it = ctx.library.add(png, "stamp", width_pt=113.4)
+    ctx.libraryChanged.emit()
+    win.set_mode("stamp")
+    tab._pick_asset(it["id"])
+    page = view.items_by_pid[tab.model.pages[0]["id"]]
+    view.ensureVisible(page.mapRectToScene(page.boundingRect()).adjusted(0, 400, 0, 0), 0, 0)
+    pump(app, 0.2)
+    vp = view.mapFromScene(page.mapToScene(QPointF(300, 600)))
+    QTest.mouseClick(view.viewport(), Qt.LeftButton, Qt.NoModifier, vp)
+    pump(app, 0.2)
+    assert len(tab.model.page_objs(page.pid)) == 1
+    assert tab.mode == "select" and tab.picked_asset() is None
+    assert win.a_modes["select"].isChecked()
+    QTest.keyClick(view.viewport(), Qt.Key_Escape)
+    QTest.mouseClick(view.viewport(), Qt.LeftButton, Qt.NoModifier, vp + type(vp)(0, 80))
+    pump(app, 0.2)
+    assert len(tab.model.page_objs(page.pid)) == 1
+    # Esc в «Подписи» без постановки — выход в «Выбор», образец сброшен
+    win.set_mode("stamp")
+    tab._pick_asset(it["id"])
+    QTest.keyClick(view.viewport(), Qt.Key_Escape)
+    pump(app, 0.1)
+    assert tab.mode == "select" and tab.picked_asset() is None

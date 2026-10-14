@@ -194,6 +194,7 @@ class DocTab(QWidget):
         sp.stamps.drawSignature.connect(self.draw_signature)
         sp.stamps.picked.connect(self._pick_asset)
         sp.stamps.removeItem.connect(self._remove_lib_item)
+        sp.stamps.renameItem.connect(self._rename_lib_item)
         sp.stamps.toPages.connect(self.stamp_to_pages)
         sp.stamps.rotate.connect(self.rotate_selected_obj)
         sp.stamps.deleteObj.connect(self.view.delete_selected)
@@ -422,6 +423,13 @@ class DocTab(QWidget):
             self.measure.cancel()
         self.mode = mode
         self.view.set_mode(mode)
+        if mode != "stamp" and self._picked is not None:
+            # вышли из «Подписи» — выбранный образец сбрасываем, чтобы клик по листу ничего не ставил
+            self._picked = None
+            lib = self.side.stamps.lib
+            lib.blockSignals(True)
+            lib.clearSelection()
+            lib.blockSignals(False)
         # что делать в режиме — подсказывает строка внизу окна; всплывает только то, чего там нет
         if mode == "stamp" and not self.library.items():
             self.toast("Загрузите скан печати или нарисуйте подпись в панели справа")
@@ -479,7 +487,7 @@ class DocTab(QWidget):
             sp.stamps.show_obj(None)
             sp.show_page("stamps")
         elif self.mode == "erase":
-            sp.erase.show_obj(None)
+            sp.erase.show_obj(None, self.erase_white_default)
             sp.show_page("erase")
         elif self.mode == "addtext":
             st = self.last_text_style
@@ -505,8 +513,13 @@ class DocTab(QWidget):
             return
         self.last_text_style.update({k: v for k, v in ch.items() if k in self.last_text_style})
 
+    erase_white_default = True
+
     def _erase_white(self, on: bool) -> None:
         pid, o = self.view.selected_obj()
+        if o is None or o["t"] != "erase":
+            self.erase_white_default = on  # настройка для новых рамок
+            return
         if o is not None and o["t"] == "erase":
             o["white"] = on
             self.model.commit()
@@ -638,14 +651,15 @@ class DocTab(QWidget):
 
         def icon_for(it):
             pm = QPixmap(self.library.path(it["id"]))
-            canvas = QPixmap(192, 144)
+            canvas = QPixmap(208, 140)
             canvas.fill(Qt.transparent)
             p = QPainter(canvas)
             p.setRenderHint(QPainter.SmoothPixmapTransform)
+            p.setRenderHint(QPainter.Antialiasing)
             if not pm.isNull():
-                k = min(184 / pm.width(), 136 / pm.height())
+                k = min(196 / pm.width(), 128 / pm.height())
                 w, h = pm.width() * k, pm.height() * k
-                p.drawPixmap(int((192 - w) / 2), int((144 - h) / 2), int(w), int(h), pm)
+                p.drawPixmap(int((208 - w) / 2), int((140 - h) / 2), int(w), int(h), pm)
             p.end()
             return QIcon(canvas)
 
@@ -660,6 +674,15 @@ class DocTab(QWidget):
 
     def picked_asset(self):
         return self._picked
+
+    def _rename_lib_item(self, iid: str) -> None:
+        it = next((i for i in self.library.items() if i["id"] == iid), None)
+        if it is None:
+            return
+        name, ok = QInputDialog.getText(self, "Переименовать", "Название образца:", text=it.get("name", ""))
+        if ok and name.strip():
+            self.library.update(iid, name=name.strip())
+            self.ctx.libraryChanged.emit()
 
     def _remove_lib_item(self, iid: str) -> None:
         if QMessageBox.question(self, "Библиотека", "Убрать этот образец из библиотеки? В уже сохранённых "
@@ -688,8 +711,12 @@ class DocTab(QWidget):
         cx, cy = page.to_unrot(lp)
         o = self.model.add_obj(page.pid, {"t": "image", "asset": aid, "cx": cx, "cy": cy, "w": w, "h": h,
                                           "angle": self.model.upright_angle(page.ref)})
+        # после постановки — сразу «Выбор»: печать выделена, её можно двигать;
+        # следующий клик по листу уже не ставит вторую (для повтора — снова выбрать образец)
         self.after_change(pages=[page.pid])
+        self.ctx.request_mode("select")
         self.view.select(o["id"])
+        self.toast("Поставлено. Потяните, чтобы сдвинуть; угол — размер, кружок сверху — поворот")
 
     def stamp_to_pages(self, which: str) -> None:
         pid, o = self.view.selected_obj()

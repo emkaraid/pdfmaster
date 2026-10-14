@@ -1211,7 +1211,7 @@ class PageView(QGraphicsView):
             self.rubber = None
             if r.width() > 2 and r.height() > 2:
                 rr = fitz.Rect(r.left(), r.top(), r.right(), r.bottom()) * page.Dinv
-                o = self.model.add_obj(page.pid, {"t": "erase", "rect": [rr.x0, rr.y0, rr.x1, rr.y1], "white": True})
+                o = self.model.add_obj(page.pid, {"t": "erase", "rect": [rr.x0, rr.y0, rr.x1, rr.y1], "white": self.tab.erase_white_default})
                 self.tab.after_change(pages=[page.pid])
                 self.select(o["id"])
             return
@@ -1273,7 +1273,7 @@ class PageView(QGraphicsView):
             if self.selected:
                 self.select(None)
             elif self.mode != "select":
-                self.tab.set_mode("select")
+                self.tab.ctx.request_mode("select")
             return
         if e.key() in (Qt.Key_PageDown, Qt.Key_Space) and not e.modifiers():
             self.verticalScrollBar().setValue(self.verticalScrollBar().value() + int(self.viewport().height() * 0.9))

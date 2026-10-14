@@ -96,10 +96,29 @@ def _close_png(c: str, size: int = 16) -> str:
     return path.replace("\\", "/")
 
 
+def _chevron_png(c: str, up: bool, size: int = 10) -> str:
+    """Стрелка для счётчиков и выпадающих списков (файлом — для QSS)."""
+    d = os.path.join(tempfile.gettempdir(), "pdfmaster-theme")
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, f"chev-{'u' if up else 'd'}-{c.lstrip('#')}-{size}.png")
+    if not os.path.exists(path):
+        pm = QPixmap(size * 2, size * 2)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(c), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        a, b, m = size * 0.45, size * 1.55, size
+        y0, y1 = (size * 1.3, size * 0.7) if up else (size * 0.7, size * 1.3)
+        p.drawLine(QPointF(a, y0), QPointF(m, y1))
+        p.drawLine(QPointF(m, y1), QPointF(b, y0))
+        p.end()
+        pm.save(path)
+    return path.replace("\\", "/")
+
+
 def stylesheet() -> str:
     t = tokens()
-    close = _close_png(t["text3"])
-    close_h = _close_png(t["text"])
+    up, down = _chevron_png(t["text2"], True), _chevron_png(t["text2"], False)
     return f"""
 QMainWindow, QStackedWidget#rootStack, QWidget#welcome {{ background: {t['bg']}; }}
 
@@ -137,11 +156,8 @@ QTabWidget#docTabs QTabBar::tab:selected {{
     background: {t['surface']}; color: {t['text']}; border-color: {t['border']};
 }}
 QTabWidget#docTabs QTabBar::tab:hover:!selected {{ background: {t['hover']}; color: {t['text']}; }}
-QTabWidget#docTabs QTabBar::close-button {{
-    image: url({close}); subcontrol-position: right; margin-left: 6px; border-radius: 5px;
-    width: 16px; height: 16px;
-}}
-QTabWidget#docTabs QTabBar::close-button:hover {{ image: url({close_h}); background: {t['hover']}; }}
+QToolButton#tabClose {{ border: none; border-radius: 6px; padding: 0; margin: 0 0 0 4px; }}
+QToolButton#tabClose:hover {{ background: {t['pressed']}; }}
 
 /* ---------- кнопки и поля ---------- */
 QPushButton {{
@@ -172,7 +188,37 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
 }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border-color: {t['accent']}; }}
 QAbstractSpinBox QLineEdit, QComboBox QLineEdit {{ border: none; padding: 0; margin: 0; background: transparent; }}
-QComboBox::drop-down {{ border: none; width: 18px; }}
+QComboBox::drop-down {{ border: none; width: 20px; }}
+QComboBox::down-arrow {{ image: url({down}); width: 10px; height: 10px; }}
+QAbstractSpinBox {{ padding-right: 18px; }}
+QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{
+    subcontrol-origin: border; width: 18px; border: none; background: transparent;
+}}
+QAbstractSpinBox::up-button {{ subcontrol-position: top right; border-top-right-radius: 7px; }}
+QAbstractSpinBox::down-button {{ subcontrol-position: bottom right; border-bottom-right-radius: 7px; }}
+QAbstractSpinBox::up-button:hover, QAbstractSpinBox::down-button:hover {{ background: {t['hover']}; }}
+QAbstractSpinBox::up-arrow {{ image: url({up}); width: 9px; height: 9px; }}
+QAbstractSpinBox::down-arrow {{ image: url({down}); width: 9px; height: 9px; }}
+QToolButton[chip="true"] {{
+    border: 1px solid {t['border2']}; border-radius: 7px; background: {t['surface']};
+    color: {t['text2']}; padding: 3px 9px;
+}}
+QToolButton[chip="true"]:hover {{ background: {t['hover']}; color: {t['text']}; }}
+QToolButton[toggle="true"] {{
+    border: 1px solid {t['border2']}; border-radius: 7px; background: {t['surface']};
+    color: {t['text']}; font-size: 14px; min-width: 30px; min-height: 26px;
+}}
+QToolButton[toggle="true"]:hover {{ background: {t['hover']}; }}
+QToolButton[toggle="true"]:checked {{
+    background: {t['accent_tint2']}; border-color: {t['accent']}; color: {t['accent_text']};
+}}
+QListWidget#stampLib {{ background: {t['surface2']}; border: 1px solid {t['border']}; border-radius: 10px;
+    padding: 6px; outline: none; }}
+QListWidget#stampLib::item {{ border: 2px solid transparent; border-radius: 10px; padding: 4px;
+    color: {t['text2']}; }}
+QListWidget#stampLib::item:hover {{ background: {t['hover']}; }}
+QListWidget#stampLib::item:selected {{ background: {t['accent_tint']}; border-color: {t['accent']};
+    color: {t['text']}; }}
 QComboBox QAbstractItemView {{
     background: {t['surface']}; color: {t['text']}; border: 1px solid {t['border']};
     selection-background-color: {t['accent_tint2']}; selection-color: {t['text']}; outline: none;
@@ -199,7 +245,9 @@ QStatusBar QLabel#modeName {{
 }}
 QStatusBar QToolButton {{ border: none; border-radius: 6px; padding: 2px; }}
 QStatusBar QSpinBox#pageSpin {{ padding: 0 4px; font-weight: 600; }}
+QSpinBox#pageSpin {{ padding-right: 4px; }}
 QSpinBox#pageSpin::up-button, QSpinBox#pageSpin::down-button {{ width: 0; border: none; }}
+QSpinBox#pageSpin::up-arrow, QSpinBox#pageSpin::down-arrow {{ image: none; width: 0; height: 0; }}
 QToolBar#main QToolButton::menu-button {{ border: none; width: 14px; border-radius: 6px; }}
 QToolBar#main QToolButton::menu-button:hover {{ background: {t['hover']}; }}
 QStatusBar QToolButton:hover {{ background: {t['hover']}; }}

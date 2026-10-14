@@ -7,7 +7,7 @@ from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QPalette, QPixmap
 from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel,
                                QMainWindow, QMessageBox, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
-                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
+                               QTabBar, QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from ..core.library import Library
 from ..core.model import DocModel
@@ -251,6 +251,8 @@ class MainWindow(QMainWindow):
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
         self.tabs.setElideMode(Qt.ElideMiddle)
+        self.tabs.tabBar().setDrawBase(False)
+        self.tabs.tabBar().setExpanding(False)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
         self.empty = EmptyState(self)
@@ -572,6 +574,16 @@ class MainWindow(QMainWindow):
         t.toastRequested.connect(self.toast.show_msg)
         t.view.currentPageChanged.connect(lambda *_: self._update_page_box())
         i = self.tabs.addTab(t, model.name)
+        # своя кнопка закрытия: крупнее стандартной, с подсветкой при наведении
+        close = QToolButton()
+        close.setObjectName("tabClose")
+        close.setIcon(icons.icon("close"))
+        close.setIconSize(QSize(12, 12))
+        close.setFixedSize(22, 22)
+        close.setCursor(Qt.PointingHandCursor)
+        close.setToolTip("Закрыть вкладку (⌘W)")
+        close.clicked.connect(lambda _=False, t=t: self.close_tab(self.tabs.indexOf(t)))
+        self.tabs.tabBar().setTabButton(i, QTabBar.RightSide, close)
         self.tabs.setCurrentIndex(i)
         self.stack.setCurrentWidget(self.tabs)
         self._update_tab_title(t)

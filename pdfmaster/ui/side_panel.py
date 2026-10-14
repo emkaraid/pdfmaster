@@ -1,8 +1,8 @@
 """Правая панель: свойства текста, библиотека подписей и печатей, листы."""
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QColorDialog, QComboBox, QDoubleSpinBox, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
                                QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
@@ -27,6 +27,13 @@ def _hint(text: str) -> QLabel:
     return lb
 
 
+def _section(text: str) -> QLabel:
+    lb = QLabel(text)
+    lb.setWordWrap(True)
+    lb.setProperty("role", "section")
+    return lb
+
+
 def _line() -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.HLine)
@@ -35,28 +42,43 @@ def _line() -> QFrame:
 
 
 class ColorButton(QToolButton):
+    """Кружок цвета; выбранный обведён кольцом фирменного цвета."""
+
     def __init__(self, color: str, parent=None):
         super().__init__(parent)
         self.color = color
-        self.setFixedSize(22, 22)
+        self.selected = False
+        self.setFixedSize(28, 28)
+        self.setAutoRaise(True)
         self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("QToolButton { border: none; background: transparent; }")
         self._paint()
 
     def set_color(self, c: str) -> None:
         self.color = c
         self._paint()
 
+    def set_selected(self, on: bool) -> None:
+        self.selected = on
+        self._paint()
+
     def _paint(self) -> None:
-        pm = QPixmap(36, 36)
+        from .theme import color as tcolor
+        pm = QPixmap(56, 56)
+        pm.setDevicePixelRatio(2)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
+        if self.selected:
+            p.setPen(QPen(tcolor("accent"), 2.0))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(QPointF(14, 14), 12, 12)
+        p.setPen(QPen(QColor(0, 0, 0, 40), 1))
         p.setBrush(QColor(self.color))
-        p.setPen(QColor(255, 255, 255, 200))
-        p.drawEllipse(3, 3, 30, 30)
+        p.drawEllipse(QPointF(14, 14), 8.5, 8.5)
         p.end()
         self.setIcon(QIcon(pm))
-        self.setIconSize(QSize(18, 18))
+        self.setIconSize(QSize(28, 28))
 
 
 class TextProps(QWidget):
@@ -78,45 +100,67 @@ class TextProps(QWidget):
         self.family = QComboBox()
         g.addWidget(self.family, 0, 1, 1, 3)
         g.addWidget(QLabel("Размер"), 1, 0)
+        srow = QHBoxLayout()
+        srow.setSpacing(6)
         self.size = QDoubleSpinBox()
         self.size.setRange(3, 300)
         self.size.setDecimals(1)
         self.size.setSingleStep(0.5)
         self.size.setSuffix(" пт")
         self.size.setKeyboardTracking(False)
-        g.addWidget(self.size, 1, 1)
+        self.size.setMinimumWidth(92)
+        srow.addWidget(self.size)
+        srow.addSpacing(6)
         self.bold = QToolButton()
         self.bold.setText("Ж")
         self.bold.setCheckable(True)
-        self.bold.setStyleSheet("font-weight: bold; min-width: 26px;")
+        self.bold.setProperty("toggle", True)
+        f = self.bold.font()
+        f.setBold(True)
+        self.bold.setFont(f)
         self.bold.setToolTip("Жирный")
         self.italic = QToolButton()
         self.italic.setText("К")
         self.italic.setCheckable(True)
-        self.italic.setStyleSheet("font-style: italic; min-width: 26px;")
+        self.italic.setProperty("toggle", True)
+        f = self.italic.font()
+        f.setItalic(True)
+        self.italic.setFont(f)
         self.italic.setToolTip("Курсив")
-        g.addWidget(self.bold, 1, 2)
-        g.addWidget(self.italic, 1, 3)
+        srow.addWidget(self.bold)
+        srow.addWidget(self.italic)
+        srow.addStretch(1)
+        g.addLayout(srow, 1, 1, 1, 3)
         g.addWidget(QLabel("Цвет"), 2, 0)
         row = QHBoxLayout()
+        row.setSpacing(2)
         self.color_btns = []
         for c in PRESET_COLORS:
             b = ColorButton(c)
+            b.setToolTip({"#000000": "Чёрный", "#1a3fa3": "Синий", "#c0262d": "Красный",
+                          "#1d7a35": "Зелёный"}.get(c, c))
             b.clicked.connect(lambda _=False, c=c: self._set_color(c))
             row.addWidget(b)
             self.color_btns.append(b)
+        self.custom_btn = ColorButton("#888888")
+        self.custom_btn.setToolTip("Другой цвет…")
+        self.custom_btn.setVisible(False)
+        self.custom_btn.clicked.connect(self._pick_color)
+        row.addWidget(self.custom_btn)
         self.more = QToolButton()
-        self.more.setText("…")
-        self.more.setToolTip("Другой цвет")
+        self.more.setText("Другой…")
+        self.more.setProperty("chip", True)
+        self.more.setCursor(Qt.PointingHandCursor)
+        self.more.setToolTip("Выбрать любой цвет")
         self.more.clicked.connect(self._pick_color)
         row.addWidget(self.more)
         row.addStretch(1)
         g.addLayout(row, 2, 1, 1, 3)
+        g.setColumnStretch(1, 1)
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(10)
         lay.addLayout(g)
-        self.cur_color = ColorButton("#000000")
-        self.cur_color.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.cur_color.setToolTip("Текущий цвет")
-        row.insertWidget(0, self.cur_color)
+        self._color = "#000000"
         self.fit = QCheckBox("Уместить в прежние строки (уменьшить шрифт)")
         self.fit.setToolTip("Если новый текст длиннее, кегль уменьшается (до 70 %), чтобы абзац не наползал на "
                             "следующий текст")
@@ -145,7 +189,9 @@ class TextProps(QWidget):
         self.fit.setChecked(fit)
         self.family.clear()
         if kind != "text":
-            self.family.addItem(f"Как в документе ({F.clean_font_name(doc_font)[:28]})", "orig")
+            self.family.addItem("Как в документе", "orig")
+            self.family.setItemData(0, f"Шрифт документа: {F.clean_font_name(doc_font)}", Qt.ToolTipRole)
+            self.family.setToolTip(f"Шрифт документа: {F.clean_font_name(doc_font)}")
         for k in F.FAMILY_ORDER:
             self.family.addItem(F.FAMILIES[k][0], k)
         i = self.family.findData(family)
@@ -153,7 +199,7 @@ class TextProps(QWidget):
         self.size.setValue(size)
         self.bold.setChecked(bold)
         self.italic.setChecked(italic)
-        self.cur_color.set_color(color)
+        self._show_color(color)
         self.title.setText({"line": "Правка строки", "para": "Правка абзаца", "text": "Новый текст"}.get(kind, "Текст"))
         self.para_btn.setVisible(kind == "line")
         self.revert_btn.setVisible(kind in ("line", "para"))
@@ -168,13 +214,25 @@ class TextProps(QWidget):
         self.hint.setStyleSheet("color: #c0262d; font-size: 11px;" if warn else "")
         self.hint.setVisible(bool(text))
 
+    def _show_color(self, c: str) -> None:
+        self._color = c.lower()
+        known = False
+        for b in self.color_btns:
+            on = b.color.lower() == self._color
+            known = known or on
+            b.set_selected(on)
+        self.custom_btn.setVisible(not known)
+        if not known:
+            self.custom_btn.set_color(c)
+            self.custom_btn.set_selected(True)
+
     def _set_color(self, c: str) -> None:
-        self.cur_color.set_color(c)
+        self._show_color(c)
         if not self._loading:
             self.changed.emit({"color": c})
 
     def _pick_color(self) -> None:
-        c = QColorDialog.getColor(QColor(self.cur_color.color), self, "Цвет текста")
+        c = QColorDialog.getColor(QColor(self._color), self, "Цвет текста")
         if c.isValid():
             self._set_color(c.name())
 
@@ -197,6 +255,7 @@ class StampPanel(QWidget):
     drawSignature = Signal()
     picked = Signal(object)          # id элемента библиотеки или None
     removeItem = Signal(str)
+    renameItem = Signal(str)
     toPages = Signal(str)            # "all" | "selected"
     rotate = Signal(int)
     deleteObj = Signal()
@@ -215,15 +274,20 @@ class StampPanel(QWidget):
         b2.clicked.connect(self.drawSignature.emit)
         lay.addWidget(b1)
         lay.addWidget(b2)
+        lay.addSpacing(6)
+        lay.addWidget(_section("БИБЛИОТЕКА — кликните образец, затем место на листе"))
         self.lib = QListWidget()
+        self.lib.setObjectName("stampLib")
         self.lib.setViewMode(QListWidget.IconMode)
-        self.lib.setIconSize(QSize(96, 72))
-        self.lib.setGridSize(QSize(112, 96))
+        self.lib.setIconSize(QSize(104, 70))
+        self.lib.setGridSize(QSize(124, 132))
         self.lib.setResizeMode(QListWidget.Adjust)
         self.lib.setMovement(QListWidget.Static)
-        self.lib.setMinimumHeight(220)
-        self.lib.setSpacing(4)
-        self.lib.setStyleSheet("QListWidget::item:selected { background: rgba(214,69,47,0.18); border-radius: 6px; }")
+        self.lib.setWordWrap(True)
+        self.lib.setUniformItemSizes(True)
+        self.lib.setMinimumHeight(250)
+        self.lib.setSpacing(2)
+        self.lib.setCursor(Qt.PointingHandCursor)
         self.lib.itemSelectionChanged.connect(self._sel)
         self.lib.setContextMenuPolicy(Qt.CustomContextMenu)
         self.lib.customContextMenuRequested.connect(self._menu)
@@ -267,9 +331,12 @@ class StampPanel(QWidget):
         self.lib.clear()
         self._items = items
         for it in items:
-            li = QListWidgetItem(icon_for(it), "")
+            name = it.get("name") or ("Подпись" if it.get("kind") == "signature" else "Печать")
+            short = name if len(name) <= 16 else name[:15] + "…"
+            li = QListWidgetItem(icon_for(it), short)
             li.setData(Qt.UserRole, it["id"])
-            li.setToolTip(it.get("name", ""))
+            li.setToolTip(name + "\nПравый клик — переименовать или убрать")
+            li.setTextAlignment(Qt.AlignHCenter | Qt.AlignTop)
             self.lib.addItem(li)
             if it["id"] == picked:
                 li.setSelected(True)
@@ -286,6 +353,7 @@ class StampPanel(QWidget):
         if it is None:
             return
         m = QMenu(self)
+        m.addAction("Переименовать…", lambda: self.renameItem.emit(it.data(Qt.UserRole)))
         m.addAction("Убрать из библиотеки", lambda: self.removeItem.emit(it.data(Qt.UserRole)))
         m.exec(self.lib.mapToGlobal(pos))
 
@@ -342,8 +410,10 @@ class EraseProps(QWidget):
         lay.addWidget(_title("Удалить область"))
         lay.addWidget(_hint("Обведите рамкой область листа: текст, картинки и линии, целиком попавшие в неё, "
                             "будут удалены из файла по-настоящему."))
-        self.white = QCheckBox("Закрасить область белым")
-        self.white.setToolTip("Скрывает и то, что попало в рамку частично (например, длинные линии)")
+        self.white = QCheckBox("Закрашивать область белым")
+        self.white.setChecked(True)
+        self.white.setToolTip("Скрывает и то, что попало в рамку лишь частично (например, длинные линии). "
+                              "Без выделенной области — настройка для новых рамок.")
         self.white.toggled.connect(self.whiteChanged.emit)
         lay.addWidget(self.white)
         self.del_btn = QPushButton(icons.icon("trash"), "Отменить удаление этой области")
@@ -351,10 +421,9 @@ class EraseProps(QWidget):
         lay.addWidget(self.del_btn)
         lay.addStretch(1)
 
-    def show_obj(self, o: dict | None) -> None:
+    def show_obj(self, o: dict | None, default_white: bool = True) -> None:
         self.white.blockSignals(True)
-        self.white.setChecked(bool(o.get("white", True)) if o else True)
-        self.white.setEnabled(o is not None)
+        self.white.setChecked(bool(o.get("white", True)) if o else default_white)
         self.white.blockSignals(False)
         self.del_btn.setVisible(o is not None)
 

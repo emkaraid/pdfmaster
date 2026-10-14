@@ -65,7 +65,7 @@ class MeasurePanel(QWidget):
         self.snap = QCheckBox("Привязка к концам линий")
         self.snap.setChecked(True)
         lay.addWidget(self.snap)
-        self.result = QLabel("—")
+        self.result = QLabel("")
         f2 = self.result.font()
         f2.setPointSizeF(f2.pointSizeF() + 5)
         f2.setBold(True)
@@ -77,12 +77,17 @@ class MeasurePanel(QWidget):
         self.sub.setProperty("role", "hint")
         self.sub.setWordWrap(True)
         lay.addWidget(self.sub)
-        lay.addWidget(QLabel("Измерения:"))
+        self.empty = QLabel("Измерений пока нет. Результат появится здесь, список — ниже.")
+        self.empty.setProperty("role", "hint")
+        self.empty.setWordWrap(True)
+        lay.addWidget(self.empty)
+        self.list_title = QLabel("Измерения:")
+        lay.addWidget(self.list_title)
         self.list = QListWidget()
-        self.list.setMinimumHeight(120)
+        self.list.setMinimumHeight(90)
         self.list.setWordWrap(True)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        lay.addWidget(self.list, 1)
+        lay.addWidget(self.list)
         r3 = QHBoxLayout()
         doc = QPushButton("Нанести в документ")
         doc.setToolTip("Записать измерения в PDF размерными линиями с подписями")
@@ -92,9 +97,18 @@ class MeasurePanel(QWidget):
         r3.addWidget(doc)
         r3.addWidget(clr)
         lay.addLayout(r3)
+        lay.addStretch(1)
+        self._extra = [self.list_title, self.list, doc, clr]
+        self.set_has(False)
         self.kind.idToggled.connect(lambda *_: self.changed.emit())
         self.scale.currentIndexChanged.connect(self._scale_changed)
         self._custom = None
+
+    def set_has(self, has: bool) -> None:
+        """Список и кнопки — только когда есть измерения."""
+        for w in self._extra:
+            w.setVisible(has)
+        self.empty.setVisible(not has)
 
     def kind_key(self) -> str:
         b = self.kind.checkedButton()
@@ -323,7 +337,8 @@ class MeasureTool:
                     it.scene().removeItem(it)
         self.done = []
         self.panel.list.clear()
-        self.panel.result.setText("—")
+        self.panel.set_has(False)
+        self.panel.result.setText("")
         self.panel.sub.setText("")
 
     # ------------------------------------------------------------ подписи
@@ -347,6 +362,7 @@ class MeasureTool:
 
     def _relabel_all(self) -> None:
         self.panel.list.clear()
+        self.panel.set_has(bool(self.done))
         for m in self.done:
             main, sub = self.label(m["pid"], m["pts"], m["kind"])
             m["label"] = main
