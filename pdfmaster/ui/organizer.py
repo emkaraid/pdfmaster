@@ -64,11 +64,6 @@ class Organizer(QWidget):
         lay.addWidget(bar)
         self.grid = ThumbPanel(tab, grid=True)
         lay.addWidget(self.grid, 1)
-        hint = QLabel("Перетаскивайте листы, чтобы поменять порядок; ⌘/⇧-клик — несколько; «+» между листами — "
-                      "вставить; файлы из Finder можно бросить прямо сюда; двойной клик — открыть лист.")
-        hint.setStyleSheet("color: palette(mid); padding: 6px 12px;")
-        hint.setWordWrap(True)
-        lay.addWidget(hint)
         self.size.valueChanged.connect(self.grid.set_thumb_width)
         g = self.grid
         g.orderChanged.connect(tab._on_thumb_order)

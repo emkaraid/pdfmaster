@@ -22,7 +22,7 @@ APP_TITLE = "PDF‑мастерская"
 MODE_HINTS = {
     "select": ("Выбор", ("Протяните по тексту — выделение, ⌘C — копировать. Подписи и печати двигаются мышью, "
                          "на пустом месте лист тянется «рукой».")),
-    "edit": ("Правка текста", ("Наведите на строку и кликните — правка на месте. Enter — готово, Esc — отмена. "
+    "edit": ("Правка текста", ("Наведите на строку и кликните — правка на месте. Enter или Esc — готово, ⌘Z — вернуть как было. "
                                "Длинный текст сам переносится по абзацу.")),
     "addtext": ("Новый текст", "Кликните в любое место листа и печатайте. Enter — новая строка, Esc — готово."),
     "erase": ("Стереть", "Обведите рамкой, что убрать: текст, картинки и линии внутри рамки удалятся."),
@@ -30,8 +30,8 @@ MODE_HINTS = {
                                    "кружок сверху — поворот.")),
     "measure": ("Линейка", ("Кликните в начало и конец. Для ломаной и площади — несколько кликов, "
                             "двойной клик — готово. ⇧ — угол кратно 15°.")),
-    "organize": ("Листы", ("Перетаскивайте листы, наведите на лист — повернуть или удалить, "
-                           "«+» между листами — вставить.")),
+    "organize": ("Листы", ("Перетаскивайте листы; наведите на лист — повернуть или удалить; «+» между "
+                           "листами — вставить; файлы из Finder можно бросить сюда; двойной клик — открыть лист.")),
 }
 
 
@@ -91,8 +91,11 @@ class Toast(QLabel):
 
     def show_msg(self, msg: str, ms: int = 3200) -> None:
         self.setText(msg)
-        self.setMaximumWidth(int(self.parent().width() * 0.7))
-        self.adjustSize()
+        # ширина — по тексту (не уже), но не больше 70 % окна; высота — по переносу
+        fm = self.fontMetrics()
+        w = min(int(self.parent().width() * 0.7), fm.horizontalAdvance(msg) + 40)
+        self.setFixedWidth(max(160, w))
+        self.setFixedHeight(self.heightForWidth(self.width()) if self.hasHeightForWidth() else self.sizeHint().height())
         p = self.parent()
         self.move((p.width() - self.width()) // 2, p.height() - self.height() - 42)
         self.raise_()
@@ -576,6 +579,8 @@ class MainWindow(QMainWindow):
         return t
 
     def _current_mode(self) -> str:
+        if getattr(self, "_org_on", False):
+            return getattr(self, "_mode_before_org", "select")
         for k, a in self.a_modes.items():
             if a.isChecked():
                 return k
@@ -603,7 +608,7 @@ class MainWindow(QMainWindow):
         else:
             self._update_tab_title(t)
             t.set_mode(self._current_mode())
-            self.a_organize.setChecked(t.organizer_shown())
+            self.show_organizer(t.organizer_shown())
             t.view.schedule_render()
         self._update_actions()
         self._update_mode_hint()
@@ -711,6 +716,19 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ режимы и состояние
 
     def show_organizer(self, on: bool) -> None:
+        # в режиме «Листы» инструменты листа не подсвечиваем, после выхода — возвращаем прежний
+        if on and not getattr(self, "_org_on", False):
+            self._mode_before_org = self._current_mode()
+            self.mode_group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
+            a = self.a_modes.get(self._mode_before_org)
+            if a is not None:
+                a.setChecked(False)
+        elif not on and getattr(self, "_org_on", False):
+            a = self.a_modes.get(getattr(self, "_mode_before_org", "select"))
+            if a is not None:
+                a.setChecked(True)
+            self.mode_group.setExclusionPolicy(QActionGroup.ExclusionPolicy.Exclusive)
+        self._org_on = on
         self.a_organize.setChecked(on)
         t = self.tab()
         if t is not None:

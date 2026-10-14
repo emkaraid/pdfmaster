@@ -422,15 +422,8 @@ class DocTab(QWidget):
             self.measure.cancel()
         self.mode = mode
         self.view.set_mode(mode)
-        if mode == "edit":
-            self.toast("Наведите на строку и кликните, чтобы править. Абзац целиком — кнопкой справа.")
-        elif mode == "addtext":
-            self.toast("Кликните в место на листе, где нужен текст")
-        elif mode == "erase":
-            self.toast("Обведите рамкой область, содержимое которой нужно удалить")
-        elif mode == "measure":
-            self.toast("Кликните в начало и в конец отрезка. Масштаб — на панели справа.")
-        elif mode == "stamp" and not self.library.items():
+        # что делать в режиме — подсказывает строка внизу окна; всплывает только то, чего там нет
+        if mode == "stamp" and not self.library.items():
             self.toast("Загрузите скан печати или нарисуйте подпись в панели справа")
         self.update_props()
         self.stateChanged.emit()
