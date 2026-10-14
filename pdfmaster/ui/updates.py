@@ -37,14 +37,25 @@ def _asset_suffix() -> str:
 
 
 def fetch_latest(timeout: float = 10.0) -> dict:
-    req = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json",
-                                               "User-Agent": "PDF-masterskaya"})
+    """Последний выпуск. Версию берём по переадресации страницы «latest» (у неё нет лимита
+    запросов, как у API GitHub), установщик — по постоянной ссылке latest/download."""
+    req = urllib.request.Request(PAGE, method="HEAD", headers={"User-Agent": "PDF-masterskaya"})
     with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as r:
-        data = json.loads(r.read().decode("utf-8"))
-    asset = next((a for a in data.get("assets", []) if a.get("name", "").endswith(_asset_suffix())), None)
-    return {"version": data.get("tag_name", "").lstrip("vV"), "notes": data.get("body", "") or "",
-            "url": asset.get("browser_download_url") if asset else None,
-            "name": asset.get("name") if asset else None, "size": asset.get("size", 0) if asset else 0}
+        final = r.geturl()                      # …/releases/tag/v1.2.0
+    tag = final.rstrip("/").rsplit("/", 1)[-1]
+    if "/tag/" not in final:
+        raise RuntimeError("выпусков пока нет")
+    name = "PDF-masterskaya" + _asset_suffix()
+    notes = ""
+    try:  # описание выпуска — по возможности (у API есть лимит, без него обойдёмся)
+        api = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json",
+                                                   "User-Agent": "PDF-masterskaya"})
+        with urllib.request.urlopen(api, timeout=timeout, context=_ctx()) as r:
+            notes = json.loads(r.read().decode("utf-8")).get("body", "") or ""
+    except Exception:
+        pass
+    return {"version": tag.lstrip("vV"), "notes": notes,
+            "url": f"https://github.com/{REPO}/releases/latest/download/{name}", "name": name, "size": 0}
 
 
 class _Bridge(QObject):
