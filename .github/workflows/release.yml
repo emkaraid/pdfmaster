@@ -74,6 +74,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q tests
+      - name: Тестовые файлы (при ошибке — для разбора)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixtures
+          path: tests/fixtures
       - name: Сборка
         run: pyinstaller --noconfirm --log-level WARN --distpath dist --workpath build/pyinstaller packaging/pdfmaster_win.spec
       - name: Проверка собранной программы

@@ -68,7 +68,7 @@ def make_act_word(path: str) -> None:
                                QPdfWriter, QTextDocument)
     from PySide6.QtWidgets import QApplication
     # QApplication (а не QGuiApplication): тот же экземпляр потом нужен тестам с окнами
-    app = QApplication.instance() or QApplication(["x"])
+    app = QApplication.instance() or QApplication(["x"])  # noqa: F841 — должен жить до конца функции
     fid = QFontDatabase.addApplicationFont(_times())
     QFontDatabase.addApplicationFont(_times_bold())
     fam = QFontDatabase.applicationFontFamilies(fid)[0] if fid >= 0 else "Times New Roman"
