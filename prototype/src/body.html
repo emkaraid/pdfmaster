@@ -1,0 +1,75 @@
+<div id="app">
+  <div id="bar">
+    <div class="grp">
+      <button class="btn" id="bOpen" title="Открыть PDF (⌘O)">Открыть</button>
+      <button class="btn" id="bAdd" title="Добавить PDF или картинку в конец">+ Добавить файл</button>
+      <button class="btn primary" id="bSave" title="Сохранить (⌘S)">Сохранить</button>
+      <button class="btn" id="bSaveAs" title="Сохранить как… (⇧⌘S)">Сохранить как…</button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="mSelect" data-mode="select" title="Выбор и перемещение">Выбор</button>
+      <button class="btn" id="mEdit" data-mode="edit" title="Кликни по тексту, чтобы изменить">Править текст</button>
+      <button class="btn" id="mAddText" data-mode="addtext" title="Кликни в любое место листа">Добавить текст</button>
+      <button class="btn" id="mStamp" data-mode="stamp" title="Подпись и печать">Подпись / печать</button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="bUndo" title="Отменить (⌘Z)">↶</button>
+      <button class="btn" id="bRedo" title="Вернуть (⇧⌘Z)">↷</button>
+    </div>
+    <div class="grp">
+      <button class="btn" id="zOut">−</button><span id="zoomv">100%</span><button class="btn" id="zIn">+</button>
+      <button class="btn" id="zFit" title="По ширине">↔</button>
+    </div>
+    <div id="fname"></div>
+  </div>
+  <div id="main">
+    <div id="thumbsWrap">
+      <div id="thumbsHead">
+        <div id="pcount">Листы</div>
+        <div class="row" id="selActs" style="display:none">
+          <button class="btn" id="sRot">↻ Повернуть</button>
+          <button class="btn" id="sDel">Удалить</button>
+          <button class="btn" id="sExt">В отдельный PDF</button>
+          <button class="btn" id="sNone">Снять</button>
+        </div>
+      </div>
+      <div id="thumbs"></div>
+    </div>
+    <div id="viewer">
+      <div id="pages"></div>
+      <div id="empty">
+        <div class="big">PDF‑мастерская</div>
+        <div>Перетащи PDF сюда или нажми «Открыть».<br>Файлы никуда не отправляются — всё работает на этом Mac.</div>
+        <button class="btn primary" id="bOpen2">Открыть PDF</button>
+      </div>
+    </div>
+    <div id="side">
+      <h3>Подпись и печать</h3>
+      <p class="hint">Выбери картинку и кликни на лист. Потом её можно двигать и тянуть за синий кружок.</p>
+      <button class="btn" id="bImg">Загрузить картинку…</button>
+      <button class="btn" id="bDraw">Нарисовать подпись…</button>
+      <label><input type="checkbox" id="cWhite" checked> Убирать белый фон у картинок</label>
+      <div id="lib"></div>
+    </div>
+  </div>
+</div>
+<div id="props"></div>
+<div id="drop">Отпусти файл, чтобы открыть</div>
+<div id="modal"><div class="box">
+  <div style="font-weight:600;margin-bottom:8px">Нарисуй подпись мышкой или пальцем на трекпаде (с зажатой кнопкой)</div>
+  <canvas id="sigc" width="560" height="220"></canvas>
+  <div class="row">
+    <span>Цвет:</span>
+    <button class="btn sc" data-c="#1a3fa3" style="color:#1a3fa3">●&nbsp;синий</button>
+    <button class="btn sc" data-c="#111111">●&nbsp;чёрный</button>
+    <span style="flex:1"></span>
+    <button class="btn" id="sigClear">Очистить</button>
+    <button class="btn" id="sigCancel">Отмена</button>
+    <button class="btn primary" id="sigOk">Готово</button>
+  </div>
+</div></div>
+<div id="toast"></div>
+<div id="busy">Сохраняю…</div>
+<input type="file" id="fOpen" accept="application/pdf,.pdf" hidden>
+<input type="file" id="fAdd" accept="application/pdf,.pdf,image/png,image/jpeg" multiple hidden>
+<input type="file" id="fImg" accept="image/png,image/jpeg" hidden>

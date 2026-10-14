@@ -1,0 +1,7 @@
+osifont-lgpl3fe.ttf (здесь — osifont.ttf)
+https://github.com/hikikomori82/osifont
+
+Шрифт для технических надписей по ISO 3098. Используемый файл — вариант
+osifont-lgpl3fe.ttf, распространяется по GNU LGPL версии 3 с исключением для
+шрифтов (GPL font exception): встраивание шрифта в документы не делает эти
+документы производными работами.

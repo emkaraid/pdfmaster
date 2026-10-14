@@ -1,0 +1,17 @@
+# окружение и сборка
+.venv/
+build/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.claude/
+
+# тестовые PDF генерируются tests/make_fixtures.py
+tests/fixtures/
+
+# личные и рабочие документы — не публикуем
+/*.pdf
+PROMPT.md
