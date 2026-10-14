@@ -89,3 +89,42 @@ class Library:
             if it["id"] == iid:
                 return os.path.join(self.root, it["file"])
         raise KeyError(iid)
+
+    # ------------------------------------------------------------ поворот, перенос на другой компьютер
+
+    def rotate(self, iid: str, deg: int) -> None:
+        """Поворачивает образец (по часовой при deg > 0); размер на листе пересчитывается."""
+        from PIL import Image
+        for it in self._items:
+            if it["id"] != iid:
+                continue
+            p = os.path.join(self.root, it["file"])
+            im = Image.open(p).convert("RGBA")
+            w0 = im.width
+            r = im.rotate(-deg, expand=True)
+            r.save(p, "PNG", optimize=True)
+            if it.get("width_pt") and deg % 180:
+                it["width_pt"] = it["width_pt"] * r.width / w0
+        self._save()
+
+    def export_zip(self, path: str) -> int:
+        """Все образцы в один файл .zip (для переноса на другой компьютер)."""
+        import zipfile
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("index.json", json.dumps(self._items, ensure_ascii=False, indent=1))
+            for it in self._items:
+                z.write(os.path.join(self.root, it["file"]), it["file"])
+        return len(self._items)
+
+    def import_zip(self, path: str) -> int:
+        """Добавляет образцы из файла экспорта; одинаковые не дублируются."""
+        import zipfile
+        n = 0
+        with zipfile.ZipFile(path) as z:
+            items = json.loads(z.read("index.json").decode("utf-8"))
+            for it in reversed(items):
+                png = z.read(it["file"])
+                before = len(self._items)
+                self.add(png, it.get("kind", "stamp"), name=it.get("name", ""), width_pt=it.get("width_pt"))
+                n += len(self._items) - before
+        return n

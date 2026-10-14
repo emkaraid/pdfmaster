@@ -4,8 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP="dist/PDF-мастерская.app"
-VER=$(cat VERSION)
-OUT="dist/PDF-masterskaya-$VER-mac-arm64.dmg"
+VER=$(cat pdfmaster/resources/VERSION)
+OUT="dist/PDF-masterskaya-mac.dmg"
 [ -d "$APP" ] || { echo "нет $APP — сначала соберите приложение" >&2; exit 1; }
 STAGE=$(mktemp -d)
 ditto "$APP" "$STAGE/PDF-мастерская.app"

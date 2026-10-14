@@ -95,6 +95,11 @@ def _draw(name: str, p: QPainter, c: QColor) -> None:
         p.drawRect(QRectF(6, 3, 12, 18))
         for a, b in ((P(3, 6), P(3, 2)), (P(21, 6), P(21, 2)), (P(3, 18), P(3, 22)), (P(21, 18), P(21, 22))):
             p.drawLine(a, b)
+    elif name == "print":
+        p.drawRect(QRectF(7, 3, 10, 6))
+        p.drawRoundedRect(QRectF(3, 9, 18, 8), 2, 2)
+        p.drawRect(QRectF(7, 14, 10, 7))
+        p.drawLine(P(9, 17), P(15, 17))
     elif name == "search":
         p.drawEllipse(QRectF(3, 3, 13, 13)); p.drawLine(P(14, 14), P(21, 21))
     elif name == "rotate":

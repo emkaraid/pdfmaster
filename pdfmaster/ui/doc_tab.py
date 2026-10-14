@@ -195,6 +195,9 @@ class DocTab(QWidget):
         sp.stamps.picked.connect(self._pick_asset)
         sp.stamps.removeItem.connect(self._remove_lib_item)
         sp.stamps.renameItem.connect(self._rename_lib_item)
+        sp.stamps.rotateItem.connect(self._rotate_lib_item)
+        sp.stamps.exportLib.connect(self._export_lib)
+        sp.stamps.importLib.connect(self._import_lib)
         sp.stamps.toPages.connect(self.stamp_to_pages)
         sp.stamps.rotate.connect(self.rotate_selected_obj)
         sp.stamps.deleteObj.connect(self.view.delete_selected)
@@ -674,6 +677,37 @@ class DocTab(QWidget):
 
     def picked_asset(self):
         return self._picked
+
+    def _rotate_lib_item(self, iid: str, deg: int) -> None:
+        self.library.rotate(iid, deg)
+        self.ctx.libraryChanged.emit()
+        self.toast("Образец повёрнут — так он и будет ставиться")
+
+    def _export_lib(self) -> None:
+        if not self.library.items():
+            self.toast("Библиотека пуста")
+            return
+        start = os.path.join(os.path.expanduser("~/Desktop"), "Подписи и печати.zip")
+        path, _ = QFileDialog.getSaveFileName(self, "Экспорт подписей и печатей", start, "Архив (*.zip)")
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        n = self.library.export_zip(path)
+        self.toast(f"Сохранено образцов: {n}. На другом компьютере: «Подпись» → «Импорт…»")
+
+    def _import_lib(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Импорт подписей и печатей", os.path.expanduser("~/Desktop"),
+                                              "Архив (*.zip)")
+        if not path:
+            return
+        try:
+            n = self.library.import_zip(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Импорт", f"Не получилось прочитать файл:\n{e}")
+            return
+        self.ctx.libraryChanged.emit()
+        self.toast(f"Добавлено образцов: {n}" if n else "Все образцы из файла уже есть в библиотеке")
 
     def _rename_lib_item(self, iid: str) -> None:
         it = next((i for i in self.library.items() if i["id"] == iid), None)

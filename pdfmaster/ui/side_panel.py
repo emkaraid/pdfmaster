@@ -256,6 +256,9 @@ class StampPanel(QWidget):
     picked = Signal(object)          # id элемента библиотеки или None
     removeItem = Signal(str)
     renameItem = Signal(str)
+    rotateItem = Signal(str, int)
+    exportLib = Signal()
+    importLib = Signal()
     toPages = Signal(str)            # "all" | "selected"
     rotate = Signal(int)
     deleteObj = Signal()
@@ -295,6 +298,17 @@ class StampPanel(QWidget):
         self.empty = _hint("Пока пусто. Загрузите скан подписи или печати (лучше на светлом фоне) "
                            "или нарисуйте подпись.")
         lay.addWidget(self.empty)
+        lay.addWidget(_hint("Правый клик по образцу — повернуть, переименовать, убрать."))
+        er = QHBoxLayout()
+        ex = QPushButton("Экспорт…")
+        ex.setToolTip("Сохранить все подписи и печати в один файл — например, для другого компьютера")
+        ex.clicked.connect(self.exportLib.emit)
+        im = QPushButton("Импорт…")
+        im.setToolTip("Добавить подписи и печати из файла экспорта")
+        im.clicked.connect(self.importLib.emit)
+        er.addWidget(ex)
+        er.addWidget(im)
+        lay.addLayout(er)
         lay.addWidget(_line())
         self.obj_box = QWidget()
         ol = QVBoxLayout(self.obj_box)
@@ -353,6 +367,10 @@ class StampPanel(QWidget):
         if it is None:
             return
         m = QMenu(self)
+        iid = it.data(Qt.UserRole)
+        m.addAction(icons.icon("rotate"), "Повернуть по часовой", lambda: self.rotateItem.emit(iid, 90))
+        m.addAction(icons.icon("rotateleft"), "Повернуть против часовой", lambda: self.rotateItem.emit(iid, -90))
+        m.addSeparator()
         m.addAction("Переименовать…", lambda: self.renameItem.emit(it.data(Qt.UserRole)))
         m.addAction("Убрать из библиотеки", lambda: self.removeItem.emit(it.data(Qt.UserRole)))
         m.exec(self.lib.mapToGlobal(pos))

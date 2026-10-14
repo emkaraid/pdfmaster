@@ -106,6 +106,15 @@ class StampImportDialog(QDialog):
         opt.addWidget(self.kind_stamp)
         opt.addWidget(self.kind_sig)
         opt.addStretch(1)
+        rl = QPushButton("↺ 90°")
+        rl.setToolTip("Повернуть против часовой")
+        rl.clicked.connect(lambda: self._rotate(90))
+        rr = QPushButton("↻ 90°")
+        rr.setToolTip("Повернуть по часовой")
+        rr.clicked.connect(lambda: self._rotate(-90))
+        opt.addWidget(QLabel("Повернуть:"))
+        opt.addWidget(rl)
+        opt.addWidget(rr)
         lay.addLayout(opt)
         self.info = QLabel("")
         self.info.setStyleSheet("color: palette(mid);")
@@ -120,6 +129,11 @@ class StampImportDialog(QDialog):
         self.slider.valueChanged.connect(lambda *_: self._timer.start())
         self.remove_bg.toggled.connect(lambda *_: self._timer.start())
         self.resize(820, 520)
+        self._update()
+
+    def _rotate(self, deg: int) -> None:
+        self.src = self.src.rotate(deg, expand=True)
+        self.before.set_image(pil_to_qimage(self.src))
         self._update()
 
     def _update(self) -> None:

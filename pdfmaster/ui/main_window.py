@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, Q
                                QTabBar, QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from ..core.library import Library
+from ..version import version
 from ..core.model import DocModel
 from ..core.saver import COMPRESS
 from ..render.service import RenderService
@@ -301,6 +302,8 @@ class MainWindow(QMainWindow):
         self.a_split = A("Разделить документ…", lambda: t() and t().split_doc(), None, "split")
         self.a_optimize = A("Оптимизировать PDF…", lambda: t() and t().optimize_dialog(), QKeySequence("Alt+Ctrl+O"),
                             "optimize", "Уменьшить размер: картинки, шрифты, лишние данные (как в Acrobat)")
+        self.a_print = A("Печать…", self._print, QKeySequence.Print, "print", "Распечатать (⌘P)")
+        self.a_updates = A("Проверить обновления…", self._check_updates, None)
         self.a_undo = A("Отменить", lambda: t() and t().undo(), QKeySequence.Undo, "undo", "Отменить (⌘Z)")
         self.a_redo = A("Вернуть", lambda: t() and t().redo(), QKeySequence("Shift+Ctrl+Z"), "redo",
                         "Вернуть (⇧⌘Z)")
@@ -380,6 +383,7 @@ class MainWindow(QMainWindow):
         f.addAction(self.a_save)
         f.addAction(self.a_save_as)
         f.addAction(self.a_optimize)
+        f.addAction(self.a_print)
         cm = f.addMenu("Сжимать при сохранении")
         for a in self.a_compress.values():
             cm.addAction(a)
@@ -418,6 +422,7 @@ class MainWindow(QMainWindow):
         pm.addAction(self.a_extract)
         pm.addAction(self.a_split)
         h = mb.addMenu("Справка")
+        h.addAction(self.a_updates)
         h.addAction(self._act("О программе", self._about))
 
     def _pill(self, *items) -> QFrame:
@@ -482,10 +487,12 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
+        tb.addAction(self.a_print)
         tb.addAction(self.a_find)
-        w = tb.widgetForAction(self.a_find)
-        if w is not None:
-            w.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        for a in (self.a_print, self.a_find):
+            w = tb.widgetForAction(a)
+            if w is not None:
+                w.setToolButtonStyle(Qt.ToolButtonIconOnly)
         for a, short in ((self.a_organize, "Листы"), (self.a_modes["edit"], "Править"),
                          (self.a_modes["addtext"], "Текст"), (self.a_modes["erase"], "Стереть"),
                          (self.a_modes["stamp"], "Подпись")):
@@ -789,7 +796,7 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         t = self.tab()
         has = t is not None
-        for a in (self.a_save, self.a_save_as, self.a_close, self.a_copy, self.a_selall, self.a_optimize, self.a_extract, self.a_split, self.a_find,
+        for a in (self.a_print, self.a_save, self.a_save_as, self.a_close, self.a_copy, self.a_selall, self.a_optimize, self.a_extract, self.a_split, self.a_find,
                   self.a_find_next, self.a_find_prev, self.a_zoom_in, self.a_zoom_out, self.a_zoom_100, self.a_fit_w,
                   self.a_fit_p, self.a_goto, self.a_rot, self.a_rotl, self.a_blank, self.a_insert, self.a_delpages,
                   self.a_delete, self.a_organize, *self.a_modes.values()):
@@ -831,11 +838,24 @@ class MainWindow(QMainWindow):
         for t in self.tabs_list():
             t.side.setVisible(self.a_side.isChecked())
 
+    def _print(self) -> None:
+        t = self.tab()
+        if t is not None:
+            from .printing import print_document
+            print_document(t)
+
+    def _check_updates(self) -> None:
+        if not hasattr(self, "_updater"):
+            from .updates import Updater
+            self._updater = Updater(self)
+        self._updater.check()
+
     def _about(self) -> None:
         import pymupdf
         from PySide6 import __version__ as qtv
         QMessageBox.about(self, "О программе",
-                          f"<b>{APP_TITLE}</b><br>Просмотр и правка PDF для Mac. Работает без интернета.<br><br>"
+                          f"<b>{APP_TITLE}</b> {version()}<br>Просмотр и правка PDF. Работает без интернета "
+                          f"(в сеть — только по кнопке «Проверить обновления»).<br><br>"
                           f"Движок: MuPDF {pymupdf.mupdf_version} (PyMuPDF {pymupdf.VersionBind}), "
                           f"интерфейс: Qt {qtv}.<br>Шрифты: PT Serif/PT Sans (OFL), Liberation (OFL), "
                           f"osifont (LGPL с исключением для шрифтов).<br>"

@@ -1,0 +1,118 @@
+name: Установщики
+
+# Метка вида v1.2.3 — собрать установщики для Mac и Windows и выложить их в релиз.
+# Запуск вручную (вкладка Actions) — только собрать и проверить, без релиза.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  mac:
+    name: Mac (Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Зависимости
+        run: |
+          brew install poppler
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Иконка
+        run: python packaging/make_icon.py
+      - name: Автотесты
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q tests
+      - name: Сборка .app
+        run: |
+          pyinstaller --noconfirm --log-level WARN --distpath dist --workpath build/pyinstaller packaging/pdfmaster.spec
+          codesign --force --deep --sign - "dist/PDF-мастерская.app"
+      - name: Проверка собранной программы
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PDFM_SELFTEST_SHOT: ${{ runner.temp }}/mac.png
+          PDFM_SETTINGS: ${{ runner.temp }}/s.ini
+          PDFM_SUPPORT_DIR: ${{ runner.temp }}/support
+        run: |
+          "dist/PDF-мастерская.app/Contents/MacOS/PDFMaster" "$PWD/tests/fixtures/act_word.pdf"
+          cat "$PDFM_SELFTEST_SHOT.txt"
+          grep -q "ready=True" "$PDFM_SELFTEST_SHOT.txt"
+      - name: Образ DMG
+        run: bash packaging/make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/*.dmg
+
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Зависимости
+        run: |
+          choco install poppler -y --no-progress
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Иконка
+        run: python packaging/make_icon.py
+      - name: Автотесты
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q tests
+      - name: Сборка
+        run: pyinstaller --noconfirm --log-level WARN --distpath dist --workpath build/pyinstaller packaging/pdfmaster_win.spec
+      - name: Проверка собранной программы
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PDFM_SELFTEST_SHOT: ${{ runner.temp }}\win.png
+          PDFM_SETTINGS: ${{ runner.temp }}\s.ini
+          PDFM_SUPPORT_DIR: ${{ runner.temp }}\support
+        run: |
+          $p = Start-Process -FilePath "dist\PDFMaster\PDFMaster.exe" -ArgumentList "`"$PWD\tests\fixtures\act_word.pdf`"" -PassThru -Wait
+          Get-Content "$env:PDFM_SELFTEST_SHOT.txt"
+          if (-not (Select-String -Path "$env:PDFM_SELFTEST_SHOT.txt" -Pattern "ready=True" -Quiet)) { exit 1 }
+      - name: Установщик
+        shell: pwsh
+        run: |
+          $ver = (Get-Content pdfmaster\resources\VERSION).Trim()
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$ver" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*-windows-setup.exe
+
+  release:
+    name: Релиз
+    needs: [mac, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+      - name: Выложить в релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" out/mac/*.dmg out/windows/*.exe \
+            --title "PDF-мастерская ${GITHUB_REF_NAME#v}" --notes-file packaging/RELEASE_NOTES.md
