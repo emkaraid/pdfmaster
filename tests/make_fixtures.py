@@ -61,9 +61,11 @@ ACT_HTML = """
 def make_act_word(path: str) -> None:
     """PDF через движок Qt: шрифты Type0 Identity-H с ToUnicode, как у Word."""
     from PySide6.QtCore import QMarginsF, QSizeF
-    from PySide6.QtGui import (QFont, QFontDatabase, QGuiApplication, QPageLayout, QPageSize,
+    from PySide6.QtGui import (QFont, QFontDatabase, QPageLayout, QPageSize,
                                QPdfWriter, QTextDocument)
-    app = QGuiApplication.instance() or QGuiApplication(["x", "-platform", "offscreen"])
+    from PySide6.QtWidgets import QApplication
+    # QApplication (а не QGuiApplication): тот же экземпляр потом нужен тестам с окнами
+    app = QApplication.instance() or QApplication(["x"])
     fid = QFontDatabase.addApplicationFont(_times())
     QFontDatabase.addApplicationFont(_times_bold())
     fam = QFontDatabase.applicationFontFamilies(fid)[0] if fid >= 0 else "Times New Roman"
@@ -78,7 +80,6 @@ def make_act_word(path: str) -> None:
     d.setPageSize(QSizeF(w.width(), w.height()))
     d.print_(w)
     del w
-    del app
 
 
 def make_drawing(path: str, n_lines: int = 32000) -> None:

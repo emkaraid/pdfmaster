@@ -66,7 +66,7 @@ def print_document(tab) -> None:
                        priority=-100, callback=built, errback=failed)
 
 
-def _paint(printer: QPrinter, path: str, prog: QProgressDialog) -> None:
+def _paint(printer: QPrinter, path: str, prog: QProgressDialog | None = None) -> None:
     doc = fitz.open(path)
     dpi = min(printer.resolution(), 300)
     k = printer.resolution() / dpi
@@ -76,10 +76,11 @@ def _paint(printer: QPrinter, path: str, prog: QProgressDialog) -> None:
         return
     try:
         for i, page in enumerate(doc):
-            if prog.wasCanceled():
-                break
-            prog.setValue(i + 1)
-            QApplication.processEvents()
+            if prog is not None:
+                if prog.wasCanceled():
+                    break
+                prog.setValue(i + 1)
+                QApplication.processEvents()
             if i:
                 printer.newPage()
             area = printer.pageLayout().paintRectPixels(printer.resolution())

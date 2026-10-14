@@ -9,7 +9,7 @@ from PIL import Image
 def test_print_fits_pages_and_rotates_landscape(fx, tmp_path):
     from PySide6.QtGui import QPageLayout, QPageSize
     from PySide6.QtPrintSupport import QPrinter
-    from PySide6.QtWidgets import QApplication, QProgressDialog
+    from PySide6.QtWidgets import QApplication
     from pdfmaster.ui.printing import _paint
     app = QApplication.instance() or QApplication([])
     out = tmp_path / "printed.pdf"
@@ -18,8 +18,7 @@ def test_print_fits_pages_and_rotates_landscape(fx, tmp_path):
     printer.setOutputFileName(str(out))
     printer.setPageSize(QPageSize(QPageSize.A4))
     printer.setPageOrientation(QPageLayout.Portrait)
-    prog = QProgressDialog()
-    _paint(printer, fx["pages"], prog)   # 6 листов, 4-й альбомный, у 3-го /Rotate 90
+    _paint(printer, fx["pages"])   # 6 листов, 4-й альбомный, у 3-го /Rotate 90
     d = fitz.open(out)
     assert d.page_count == 6
     for p in d:
@@ -29,7 +28,7 @@ def test_print_fits_pages_and_rotates_landscape(fx, tmp_path):
     a = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3)
     ys = np.nonzero((a < 200).any(axis=2).any(axis=1))[0]
     assert len(ys)
-    del app
+    assert app is not None
 
 
 def test_library_rotate_export_import(tmp_path):
