@@ -50,7 +50,10 @@ def test_act_replace_sum(fx, tmp_path):
     # MuPDF-поиск тоже не находит старую сумму
     d = fitz.open(out)
     assert not d[0].search_for("1 250 000")
-    assert len(d[0].search_for("2 480 500")) == 2
+    assert d[0].search_for("2 480 500")
+    # MuPDF может подсветить сумму двумя прямоугольниками (часть цифр — шрифтом-заменой),
+    # поэтому вхождения считаем по тексту листа
+    assert norm_ws(d[0].get_text()).count("2 480 500") == 2
     # Растровое сравнение: вне правленных строк лист не изменился
     a, b = render(fx["act"]), render(str(out))
     diff = diff_mask(a, b)
@@ -221,7 +224,8 @@ def test_paragraph_fit_into_original_lines(fx, tmp_path):
         rows, size = para_rows(page, para, new, None)
     assert rows == len(para) + 1                        # без «уместить» — на строку длиннее
     rows, size = para_rows(page, para, new, {"fit": True})
-    assert rows == 2 and size < 16                      # с «уместить» — в две строки, кегль меньше
+    span_size = para[0]["spans"][para[0]["chars"][0][7]]["size"]
+    assert rows == len(para) and size < span_size       # с «уместить» — в прежние строки, кегль меньше
     m.add_obj(m.pages[0]["id"], {"t": "edit", "lines": para, "text": new, "style": {"fit": True}, "para": True})
     out = tmp_path / "o.pdf"
     _save(m, out)

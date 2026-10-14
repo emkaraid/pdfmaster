@@ -18,6 +18,7 @@ BT/TJ/ET с точными позициями глифов: шрифтом до�
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 
 import pymupdf as fitz
@@ -167,9 +168,14 @@ def _match_substitute(pf: F.PageFonts, span: dict, sample: str, st: Style) -> No
     df = pf.find(span["font"], sample)
     if df is None or not st.fontfile:
         return
+    # замена — тот же шрифт по имени (Liberation вместо Liberation, Times вместо Times): не трогаем
+    ex = F.exact_font_file(span["font"], span["flags"])
+    if ex and os.path.abspath(ex) == os.path.abspath(st.fontfile):
+        return
     k = 1.0
     sub_cap = F.cap_height(st.fontfile)
-    if df.cap_height and sub_cap:
+    # /CapHeight в PDF бывает неверным (так пишет, например, Qt под Windows) — берём только правдоподобное
+    if df.cap_height and sub_cap and 0.5 <= df.cap_height <= 0.78:
         k = min(1.25, max(0.75, df.cap_height / sub_cap))
         if abs(k - 1.0) < 0.06:   # тот же шрифт из системы или близкий — не трогаем
             k = 1.0
