@@ -67,5 +67,7 @@ if [ "$INSTALL" = 1 ]; then
   LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   "$LSR" -u "$PWD/dist/$APP" 2>/dev/null || true   # чтобы в «Открыть с помощью» не было копии из dist
   "$LSR" -f "/Applications/$APP" || true
+  # копию в dist/ убираем, иначе Spotlight снова добавит её в «Открыть с помощью»
+  rm -rf "dist/$APP"
   echo "   Готово: /Applications/$APP"
 fi
