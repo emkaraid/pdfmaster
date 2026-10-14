@@ -37,7 +37,15 @@ def main(argv: list[str] | None = None) -> int:
             return super().event(e)
 
     argv = list(sys.argv if argv is None else argv)
+    if sys.platform.startswith("win"):
+        try:  # своя иконка на панели задач, а не иконка python.exe
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PDFMaster.PDFMasterskaya")
+        except Exception:
+            pass
     app = App(argv)
+    from .ui import platform_text
+    platform_text.install(app)
     from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
     QLocale.setDefault(QLocale(QLocale.Russian, QLocale.Russia))
     tr = QTranslator(app)
@@ -52,6 +60,10 @@ def main(argv: list[str] | None = None) -> int:
     ctx = AppContext()
     win = MainWindow(ctx)
     app.window = win
+    if platform_text.IS_WIN:
+        from PySide6.QtGui import QAction
+        for a in win.findChildren(QAction):
+            platform_text.fix_action(a)
     win.show()
     files = [a for a in argv[1:] if not a.startswith("-") and os.path.exists(a)]
     QTimer.singleShot(0, lambda: win.open_paths(files + app.pending) if files or app.pending else None)

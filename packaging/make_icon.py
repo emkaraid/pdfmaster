@@ -80,6 +80,9 @@ def main() -> None:
     for s in (16, 32, 128, 256, 512):
         big.resize((s, s), Image.LANCZOS).save(os.path.join(iconset, f"icon_{s}x{s}.png"))
         big.resize((2 * s, 2 * s), Image.LANCZOS).save(os.path.join(iconset, f"icon_{s}x{s}@2x.png"))
+    # .ico для Windows (несколько размеров в одном файле)
+    big.save(os.path.join(build, "icon.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64),
+                                                     (128, 128), (256, 256)])
     if sys.platform == "darwin":
         subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(build, "icon.icns")], check=True)
     print("icon ok")

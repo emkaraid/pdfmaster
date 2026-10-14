@@ -839,7 +839,7 @@ class MainWindow(QMainWindow):
                           f"Движок: MuPDF {pymupdf.mupdf_version} (PyMuPDF {pymupdf.VersionBind}), "
                           f"интерфейс: Qt {qtv}.<br>Шрифты: PT Serif/PT Sans (OFL), Liberation (OFL), "
                           f"osifont (LGPL с исключением для шрифтов).<br>"
-                          f"Библиотека подписей: ~/Library/Application Support/PDF-мастерская/")
+                          f"Библиотека подписей: {Library().root}")
 
     def changeEvent(self, e) -> None:
         super().changeEvent(e)

@@ -29,22 +29,26 @@ def resource_dir() -> str:
 
 FONT_DIR = os.path.join(resource_dir(), "fonts")
 SYS_DIR = "/System/Library/Fonts/Supplemental"
+WIN_DIR = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+IS_WIN = sys.platform.startswith("win")
+if IS_WIN:
+    SYS_DIR = WIN_DIR
 
 # ключ семейства -> (подпись в интерфейсе, {стиль: [кандидаты-файлы]})
 # стиль: "r", "b", "i", "bi". Сначала системный шрифт (настоящий Times/Arial),
 # потом встроенная в программу свободная замена с кириллицей.
 FAMILIES: dict[str, tuple[str, dict[str, list[str]]]] = {
     "serif": ("Times New Roman", {
-        "r": [f"{SYS_DIR}/Times New Roman.ttf", "LiberationSerif-Regular.ttf"],
-        "b": [f"{SYS_DIR}/Times New Roman Bold.ttf", "LiberationSerif-Bold.ttf"],
-        "i": [f"{SYS_DIR}/Times New Roman Italic.ttf", "LiberationSerif-Italic.ttf"],
-        "bi": [f"{SYS_DIR}/Times New Roman Bold Italic.ttf", "LiberationSerif-BoldItalic.ttf"],
+        "r": [(f"{SYS_DIR}/times.ttf" if IS_WIN else f"{SYS_DIR}/Times New Roman.ttf"), "LiberationSerif-Regular.ttf"],
+        "b": [(f"{SYS_DIR}/timesbd.ttf" if IS_WIN else f"{SYS_DIR}/Times New Roman Bold.ttf"), "LiberationSerif-Bold.ttf"],
+        "i": [(f"{SYS_DIR}/timesi.ttf" if IS_WIN else f"{SYS_DIR}/Times New Roman Italic.ttf"), "LiberationSerif-Italic.ttf"],
+        "bi": [(f"{SYS_DIR}/timesbi.ttf" if IS_WIN else f"{SYS_DIR}/Times New Roman Bold Italic.ttf"), "LiberationSerif-BoldItalic.ttf"],
     }),
     "sans": ("Arial", {
-        "r": [f"{SYS_DIR}/Arial.ttf", "LiberationSans-Regular.ttf"],
-        "b": [f"{SYS_DIR}/Arial Bold.ttf", "LiberationSans-Bold.ttf"],
-        "i": [f"{SYS_DIR}/Arial Italic.ttf", "LiberationSans-Italic.ttf"],
-        "bi": [f"{SYS_DIR}/Arial Bold Italic.ttf", "LiberationSans-BoldItalic.ttf"],
+        "r": [(f"{SYS_DIR}/arial.ttf" if IS_WIN else f"{SYS_DIR}/Arial.ttf"), "LiberationSans-Regular.ttf"],
+        "b": [(f"{SYS_DIR}/arialbd.ttf" if IS_WIN else f"{SYS_DIR}/Arial Bold.ttf"), "LiberationSans-Bold.ttf"],
+        "i": [(f"{SYS_DIR}/ariali.ttf" if IS_WIN else f"{SYS_DIR}/Arial Italic.ttf"), "LiberationSans-Italic.ttf"],
+        "bi": [(f"{SYS_DIR}/arialbi.ttf" if IS_WIN else f"{SYS_DIR}/Arial Bold Italic.ttf"), "LiberationSans-BoldItalic.ttf"],
     }),
     "ptserif": ("PT Serif", {
         "r": ["PT_Serif-Web-Regular.ttf"], "b": ["PT_Serif-Web-Bold.ttf"],
@@ -55,10 +59,10 @@ FAMILIES: dict[str, tuple[str, dict[str, list[str]]]] = {
         "i": ["PT_Sans-Web-Italic.ttf"], "bi": ["PT_Sans-Web-BoldItalic.ttf"],
     }),
     "mono": ("Courier New", {
-        "r": [f"{SYS_DIR}/Courier New.ttf", "LiberationMono-Regular.ttf"],
-        "b": [f"{SYS_DIR}/Courier New Bold.ttf", "LiberationMono-Bold.ttf"],
-        "i": [f"{SYS_DIR}/Courier New Italic.ttf", "LiberationMono-Italic.ttf"],
-        "bi": [f"{SYS_DIR}/Courier New Bold Italic.ttf", "LiberationMono-BoldItalic.ttf"],
+        "r": [(f"{SYS_DIR}/cour.ttf" if IS_WIN else f"{SYS_DIR}/Courier New.ttf"), "LiberationMono-Regular.ttf"],
+        "b": [(f"{SYS_DIR}/courbd.ttf" if IS_WIN else f"{SYS_DIR}/Courier New Bold.ttf"), "LiberationMono-Bold.ttf"],
+        "i": [(f"{SYS_DIR}/couri.ttf" if IS_WIN else f"{SYS_DIR}/Courier New Italic.ttf"), "LiberationMono-Italic.ttf"],
+        "bi": [(f"{SYS_DIR}/courbi.ttf" if IS_WIN else f"{SYS_DIR}/Courier New Bold Italic.ttf"), "LiberationMono-BoldItalic.ttf"],
     }),
     "gost": ("ГОСТ (osifont)", {
         "r": ["osifont.ttf"], "b": ["osifont.ttf"], "i": ["osifont.ttf"], "bi": ["osifont.ttf"],
@@ -142,7 +146,10 @@ def _font_index() -> dict[tuple[str, bool, bool], str]:
     idx: dict[tuple[str, bool, bool], str] = {}
     dirs = [FONT_DIR]
     if not _only_bundled:
-        dirs += [SYS_DIR, "/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")]
+        if IS_WIN:
+            dirs += [WIN_DIR, os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")]
+        else:
+            dirs += [SYS_DIR, "/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")]
     for d in dirs:
         try:
             files = sorted(os.listdir(d))

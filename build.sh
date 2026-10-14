@@ -3,16 +3,19 @@
 #   ./build.sh               — тесты, сборка, установка
 #   ./build.sh --no-tests    — без автотестов
 #   ./build.sh --no-install  — собрать в dist/, не копировать в /Applications
+#   ./build.sh --dmg         — ещё и образ .dmg для установки на другие Mac
 set -euo pipefail
 cd "$(dirname "$0")"
 
 APP="PDF-мастерская.app"
 RUN_TESTS=1
 INSTALL=1
+DMG=0
 for a in "$@"; do
   case "$a" in
     --no-tests) RUN_TESTS=0 ;;
     --no-install) INSTALL=0 ;;
+    --dmg) DMG=1 ;;
   esac
 done
 
@@ -55,6 +58,10 @@ arch -arm64 .venv/bin/pyinstaller --noconfirm --log-level WARN --distpath dist -
 # подпись «ad hoc» (обязательна для arm64)
 codesign --force --deep --sign - "dist/$APP" 2>/dev/null
 echo "   dist/$APP ($(du -sh "dist/$APP" | cut -f1))"
+if [ "$DMG" = 1 ]; then
+  echo "==> Образ DMG"
+  bash packaging/make_dmg.sh
+fi
 
 if [ "$INSTALL" = 1 ]; then
   echo "==> Установка в /Applications"

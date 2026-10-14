@@ -1,16 +1,23 @@
-"""Библиотека подписей и печатей в ~/Library/Application Support/PDF-мастерская/."""
+"""Библиотека подписей и печатей: Mac — ~/Library/Application Support/PDF-мастерская/,
+Windows — %APPDATA%\\PDF-мастерская\\."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import sys
 import time
 
 APP_NAME = "PDF-мастерская"
 
 
 def app_support_dir() -> str:
-    d = os.environ.get("PDFM_SUPPORT_DIR") or os.path.expanduser(f"~/Library/Application Support/{APP_NAME}")
+    d = os.environ.get("PDFM_SUPPORT_DIR")
+    if not d:
+        if sys.platform.startswith("win"):
+            d = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
+        else:
+            d = os.path.expanduser(f"~/Library/Application Support/{APP_NAME}")
     os.makedirs(d, exist_ok=True)
     return d
 
