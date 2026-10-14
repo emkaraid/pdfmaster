@@ -64,7 +64,9 @@ def test_act_replace_sum(fx, tmp_path):
                  for s in ln["spans"] if "480" in s["text"] and abs(s["origin"][1] - y) < 0.5]
         assert found, "новая сумма не на той же базовой линии"
         assert abs(found[0]["size"] - h["spans"][0]["size"]) < 0.05
-        assert "Times" in found[0]["font"] or "TimesNewRoman" in found[0]["font"]
+        # тот же шрифт, что в исходной строке (свой из документа или тот же по имени)
+        from pdfmaster.core.fonts import _core_name
+        assert _core_name(found[0]["font"])[0] == _core_name(h["spans"][0]["font"])[0]
 
 
 def test_unchanged_prefix_keeps_original_glyphs(fx, tmp_path):
@@ -84,9 +86,10 @@ def test_reuse_document_font_when_glyphs_exist(fx, tmp_path):
     _edit(m, 0, "870 000", "380 000")  # все цифры уже есть в документе
     out = tmp_path / "o.pdf"
     _save(m, out)
-    fonts = {f[3] for f in fitz.open(out)[0].get_fonts()}
-    assert all("Times" in f for f in fonts), fonts
-    assert len({f.split("+")[-1] for f in fonts}) == 2  # только обычный и жирный из исходника
+    from pdfmaster.core.fonts import clean_font_name
+    fonts = {clean_font_name(f[3]) for f in fitz.open(out)[0].get_fonts()}
+    before = {clean_font_name(f[3]) for f in fitz.open(fx["act"])[0].get_fonts()}
+    assert fonts == before, (fonts, before)  # ни одного нового шрифта — повторно использован шрифт документа
 
 
 def test_libreoffice_act(fx, tmp_path):
@@ -208,11 +211,15 @@ def test_paragraph_fit_into_original_lines(fx, tmp_path):
     first = [ln for ln in lines if ln["text"].startswith("Общая стоимость")][0]
     para = paragraph_of(lines, first)
     assert len(para) == 2
-    new = " ".join(ln["text"] for ln in para).replace("руб. 00", "руб. 00 (два миллиона четыреста восемьдесят "
-                                                      "тысяч пятьсот рублей)")
     page = m.src_page(m.pages[0])
+    words = " (два миллиона четыреста восемьдесят тысяч пятьсот рублей)"
+    base = " ".join(ln["text"] for ln in para)
+    new = base.replace("руб. 00", "руб. 00" + words)
     rows, size = para_rows(page, para, new, None)
-    assert rows == 3                                    # без «уместить» — на строку длиннее
+    if rows <= len(para):  # на другом шрифте могло уместиться — удлиним
+        new = base.replace("руб. 00", "руб. 00" + words + " по акту № 15")
+        rows, size = para_rows(page, para, new, None)
+    assert rows == len(para) + 1                        # без «уместить» — на строку длиннее
     rows, size = para_rows(page, para, new, {"fit": True})
     assert rows == 2 and size < 16                      # с «уместить» — в две строки, кегль меньше
     m.add_obj(m.pages[0]["id"], {"t": "edit", "lines": para, "text": new, "style": {"fit": True}, "para": True})

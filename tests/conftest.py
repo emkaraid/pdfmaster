@@ -16,7 +16,7 @@ os.environ.setdefault("PDFM_SETTINGS", os.path.join(tempfile.mkdtemp(prefix="pdf
 
 from tests.make_fixtures import make_all  # noqa: E402
 
-FIX = os.path.join(ROOT, "tests", "fixtures")
+FIX = os.environ.get("PDFM_FIXTURES_DIR") or os.path.join(ROOT, "tests", "fixtures")
 
 
 @pytest.fixture(scope="session")

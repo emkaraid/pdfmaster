@@ -27,14 +27,17 @@ FONTS = os.path.join(ROOT, "pdfmaster", "resources", "fonts")
 SYS = "/System/Library/Fonts/Supplemental"
 
 
+LIBERATION = os.environ.get("PDFM_FIXTURE_LIBERATION") == "1"  # как на машине без Times New Roman
+
+
 def _times() -> str:
     p = os.path.join(SYS, "Times New Roman.ttf")
-    return p if os.path.exists(p) else os.path.join(FONTS, "LiberationSerif-Regular.ttf")
+    return p if os.path.exists(p) and not LIBERATION else os.path.join(FONTS, "LiberationSerif-Regular.ttf")
 
 
 def _times_bold() -> str:
     p = os.path.join(SYS, "Times New Roman Bold.ttf")
-    return p if os.path.exists(p) else os.path.join(FONTS, "LiberationSerif-Bold.ttf")
+    return p if os.path.exists(p) and not LIBERATION else os.path.join(FONTS, "LiberationSerif-Bold.ttf")
 
 
 ACT_HTML = """

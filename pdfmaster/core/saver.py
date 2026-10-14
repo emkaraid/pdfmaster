@@ -103,8 +103,9 @@ def write_atomic(path: str, writer) -> None:
         writer(tmp)
         with open(tmp, "rb+") as f:
             os.fsync(f.fileno())
-        # проверим, что записанное открывается
-        chk = fitz.open(tmp)
+        # проверим, что записанное открывается (из памяти: открытый файл Windows не даст удалить)
+        with open(tmp, "rb") as f:
+            chk = fitz.open(stream=f.read(), filetype="pdf")
         n = chk.page_count
         chk.close()
         if n <= 0:
