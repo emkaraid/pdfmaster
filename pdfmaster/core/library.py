@@ -1,5 +1,5 @@
-"""Библиотека подписей и печатей: Mac — ~/Library/Application Support/PDF-мастерская/,
-Windows — %APPDATA%\\PDF-мастерская\\."""
+"""Библиотека подписей и печатей: Mac — ~/Library/Application Support/PDFMaster/,
+Windows — %APPDATA%\\PDFMaster\\."""
 from __future__ import annotations
 
 import hashlib
@@ -8,16 +8,24 @@ import os
 import sys
 import time
 
-APP_NAME = "PDF-мастерская"
+APP_NAME = "PDFMaster"
+OLD_NAME = "PDF-мастерская"   # название папки до версии 1.2
 
 
 def app_support_dir() -> str:
     d = os.environ.get("PDFM_SUPPORT_DIR")
     if not d:
         if sys.platform.startswith("win"):
-            d = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)
+            base = os.environ.get("APPDATA") or os.path.expanduser("~")
         else:
-            d = os.path.expanduser(f"~/Library/Application Support/{APP_NAME}")
+            base = os.path.expanduser("~/Library/Application Support")
+        d = os.path.join(base, APP_NAME)
+        old = os.path.join(base, OLD_NAME)
+        if not os.path.exists(d) and os.path.isdir(old):
+            try:  # подписи и печати из прежней версии переезжают в новую папку
+                os.rename(old, d)
+            except OSError:
+                d = old
     os.makedirs(d, exist_ok=True)
     return d
 

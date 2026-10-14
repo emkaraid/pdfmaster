@@ -1,5 +1,5 @@
 #!/bin/bash
-# Сборка PDF-мастерской в .app и установка в /Applications.
+# Сборка PDFMaster в .app и установка в /Applications.
 #   ./build.sh               — тесты, сборка, установка
 #   ./build.sh --no-tests    — без автотестов
 #   ./build.sh --no-install  — собрать в dist/, не копировать в /Applications
@@ -7,7 +7,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="PDF-мастерская.app"
+APP="PDFMaster.app"
+OLD_APP="PDF-мастерская.app"   # прежнее название (до 1.2)
 RUN_TESTS=1
 INSTALL=1
 DMG=0
@@ -68,8 +69,17 @@ if [ "$INSTALL" = 1 ]; then
   if pgrep -f "/Applications/$APP/Contents/MacOS/PDFMaster" >/dev/null; then
     echo "   Программа запущена — закройте её и запустите сборку снова." >&2; exit 1
   fi
+  if pgrep -f "/Applications/$OLD_APP/Contents/MacOS/PDFMaster" >/dev/null; then
+    echo "   Запущена прежняя версия — закройте её и запустите сборку снова." >&2; exit 1
+  fi
   rm -rf "/Applications/$APP"
   ditto "dist/$APP" "/Applications/$APP"
+  # прежнее название убираем, чтобы не было двух программ
+  if [ -d "/Applications/$OLD_APP" ]; then
+    "${LSR:=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}" \
+      -u "/Applications/$OLD_APP" 2>/dev/null || true
+    rm -rf "/Applications/$OLD_APP"
+  fi
   # обновить регистрацию (иконка, «Открыть с помощью»)
   LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   "$LSR" -u "$PWD/dist/$APP" 2>/dev/null || true   # чтобы в «Открыть с помощью» не было копии из dist

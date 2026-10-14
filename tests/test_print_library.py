@@ -52,3 +52,20 @@ def test_library_rotate_export_import(tmp_path):
     assert got["name"] == "Подпись" and got["kind"] == "signature"
     assert Image.open(other.path(got["id"])).size == (100, 300)
     assert os.path.getsize(z) > 0
+
+
+def test_library_moves_from_old_folder(tmp_path, monkeypatch):
+    """После переименования в PDFMaster подписи из папки «PDF-мастерская» не теряются."""
+    import sys
+    from pdfmaster.core import library as L
+    monkeypatch.delenv("PDFM_SUPPORT_DIR", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    base = tmp_path if sys.platform.startswith("win") else tmp_path / "Library" / "Application Support"
+    old = base / L.OLD_NAME / "library"
+    old.mkdir(parents=True)
+    (old / "index.json").write_text("[]", encoding="utf-8")
+    d = L.app_support_dir()
+    assert os.path.basename(d) == "PDFMaster"
+    assert os.path.exists(os.path.join(d, "library", "index.json"))
+    assert not (base / L.OLD_NAME).exists()

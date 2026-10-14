@@ -12,7 +12,7 @@ def main(argv: list[str] | None = None) -> int:
         multiprocessing.set_start_method("spawn")
     except RuntimeError:
         pass
-    from PySide6.QtCore import QEvent, QTimer
+    from PySide6.QtCore import QEvent, Qt, QTimer
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
@@ -34,6 +34,13 @@ def main(argv: list[str] | None = None) -> int:
                     else:
                         self.pending.append(path)
                 return True
+            if e.type() == QEvent.Quit and self.window is not None:
+                # ⌘Q, «Завершить» в Dock, выход из системы — окно должно закрыться по-настоящему
+                self.window.quitting = True
+                try:
+                    return super().event(e)
+                finally:  # если выход отменили («Отмена» в вопросе о сохранении)
+                    self.window.quitting = False
             return super().event(e)
 
     argv = list(sys.argv if argv is None else argv)
@@ -65,6 +72,15 @@ def main(argv: list[str] | None = None) -> int:
         for a in win.findChildren(QAction):
             platform_text.fix_action(a)
     win.show()
+    if sys.platform == "darwin":
+        # закрытое окно не завершает программу; щелчок по значку в Dock открывает его снова
+        app.setQuitOnLastWindowClosed(False)
+
+        def reopen(state):
+            if state == Qt.ApplicationActive and not win.isVisible():
+                win.show()
+                win.raise_()
+        app.applicationStateChanged.connect(reopen)
     files = [a for a in argv[1:] if not a.startswith("-") and os.path.exists(a)]
     QTimer.singleShot(0, lambda: win.open_paths(files + app.pending) if files or app.pending else None)
     app.aboutToQuit.connect(ctx.service.shutdown)

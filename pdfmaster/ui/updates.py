@@ -39,17 +39,17 @@ def _asset_suffix() -> str:
 def fetch_latest(timeout: float = 10.0) -> dict:
     """Последний выпуск. Версию берём по переадресации страницы «latest» (у неё нет лимита
     запросов, как у API GitHub), установщик — по постоянной ссылке latest/download."""
-    req = urllib.request.Request(PAGE, method="HEAD", headers={"User-Agent": "PDF-masterskaya"})
+    req = urllib.request.Request(PAGE, method="HEAD", headers={"User-Agent": "PDFMaster"})
     with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as r:
         final = r.geturl()                      # …/releases/tag/v1.2.0
     tag = final.rstrip("/").rsplit("/", 1)[-1]
     if "/tag/" not in final:
         raise RuntimeError("выпусков пока нет")
-    name = "PDF-masterskaya" + _asset_suffix()
+    name = "PDFMaster" + _asset_suffix()
     notes = ""
     try:  # описание выпуска — по возможности (у API есть лимит, без него обойдёмся)
         api = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json",
-                                                   "User-Agent": "PDF-masterskaya"})
+                                                   "User-Agent": "PDFMaster"})
         with urllib.request.urlopen(api, timeout=timeout, context=_ctx()) as r:
             notes = json.loads(r.read().decode("utf-8")).get("body", "") or ""
     except Exception:
@@ -126,7 +126,7 @@ class Updater:
 
         def work():
             try:
-                req = urllib.request.Request(info["url"], headers={"User-Agent": "PDF-masterskaya"})
+                req = urllib.request.Request(info["url"], headers={"User-Agent": "PDFMaster"})
                 tmp = dest + ".part"
                 with urllib.request.urlopen(req, timeout=30, context=_ctx()) as r, open(tmp, "wb") as f:
                     total = int(r.headers.get("Content-Length") or info["size"] or 0)
@@ -166,4 +166,4 @@ class Updater:
             subprocess.Popen(["open", path])
             QMessageBox.information(self.parent, "Обновление",
                                     "Образ с новой версией открыт. Закройте программу и перетащите "
-                                    "«PDF-мастерская» в «Программы» с заменой.")
+                                    "«PDFMaster» в «Программы» с заменой.")

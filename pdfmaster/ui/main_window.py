@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QPalette, QPixmap
@@ -17,7 +18,7 @@ from ..render.service import RenderService
 from . import icons, theme
 from .doc_tab import OPEN_FILTER, DocTab, open_model
 
-APP_TITLE = "PDF‑мастерская"
+APP_TITLE = "PDFMaster"
 
 # Что делать в каждом режиме — одной строкой внизу окна, пока режим включён.
 MODE_HINTS = {
@@ -236,6 +237,7 @@ class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext):
         super().__init__()
         self.ctx = ctx
+        self.quitting = False   # выход из программы (⌘Q), а не просто закрытие окна
         theme.apply(QApplication.instance())
         self.setWindowTitle(APP_TITLE)
         self.setUnifiedTitleAndToolBarOnMac(True)
@@ -638,6 +640,10 @@ class MainWindow(QMainWindow):
         t = self.tabs.widget(i)
         if isinstance(t, DocTab) and not t.can_close():
             return
+        self._drop_tab(i)
+
+    def _drop_tab(self, i: int) -> None:
+        t = self.tabs.widget(i)
         self.tabs.removeTab(i)
         t.deleteLater()
         if self.tabs.count() == 0:
@@ -672,6 +678,8 @@ class MainWindow(QMainWindow):
                 self.add_tab(m)
                 if m.path:
                     self.ctx.add_recent(m.path)
+        if not self.isVisible():
+            self.show()
         self.raise_()
         self.activateWindow()
 
@@ -888,4 +896,12 @@ class MainWindow(QMainWindow):
                 e.ignore()
                 return
         self.ctx.settings.setValue("geometry", self.saveGeometry())
+        if sys.platform == "darwin" and not self.quitting:
+            # как принято на Mac: окно закрывается вместе с документами, программа остаётся в Dock
+            # (значок в Dock открывает окно снова, совсем выйти — ⌘Q)
+            e.ignore()
+            while self.tabs.count():
+                self._drop_tab(0)
+            self.hide()
+            return
         e.accept()

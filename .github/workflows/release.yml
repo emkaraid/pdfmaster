@@ -37,7 +37,7 @@ jobs:
       - name: Сборка .app
         run: |
           pyinstaller --noconfirm --log-level WARN --distpath dist --workpath build/pyinstaller packaging/pdfmaster.spec
-          codesign --force --deep --sign - "dist/PDF-мастерская.app"
+          codesign --force --deep --sign - "dist/PDFMaster.app"
       - name: Проверка собранной программы
         env:
           QT_QPA_PLATFORM: offscreen
@@ -45,7 +45,7 @@ jobs:
           PDFM_SETTINGS: ${{ runner.temp }}/s.ini
           PDFM_SUPPORT_DIR: ${{ runner.temp }}/support
         run: |
-          "dist/PDF-мастерская.app/Contents/MacOS/PDFMaster" "$PWD/tests/fixtures/act_word.pdf"
+          "dist/PDFMaster.app/Contents/MacOS/PDFMaster" "$PWD/tests/fixtures/act_word.pdf"
           cat "$PDFM_SELFTEST_SHOT.txt"
           grep -q "ready=True" "$PDFM_SELFTEST_SHOT.txt"
       - name: Образ DMG
@@ -120,5 +120,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # копии под прежними именами: по ним обновляются версии до 1.2 и работают старые ссылки
+          cp out/mac/PDFMaster-mac.dmg out/mac/PDF-masterskaya-mac.dmg
+          cp out/windows/PDFMaster-windows-setup.exe out/windows/PDF-masterskaya-windows-setup.exe
           gh release create "${GITHUB_REF_NAME}" out/mac/*.dmg out/windows/*.exe \
-            --title "PDF-мастерская ${GITHUB_REF_NAME#v}" --notes-file packaging/RELEASE_NOTES.md
+            --title "PDFMaster ${GITHUB_REF_NAME#v}" --notes-file packaging/RELEASE_NOTES.md

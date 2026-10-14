@@ -4,20 +4,22 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppName "PDF-мастерская"
+#define AppName "PDFMaster"
 #define AppExe "PDFMaster.exe"
 
 [Setup]
+; AppId прежний: новая версия ставится поверх старой (в том числе поверх «PDF-мастерской»)
 AppId={{6E1C4F2A-3B7D-4C59-9A41-0F5D2B8C7E13}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=PDF-мастерская
-DefaultDirName={autopf}\PDF-masterskaya
+AppPublisher=PDFMaster
+DefaultDirName={autopf}\PDFMaster
+UsePreviousAppDir=no
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir=..\..\dist
-OutputBaseFilename=PDF-masterskaya-windows-setup
+OutputBaseFilename=PDFMaster-windows-setup
 SetupIconFile=..\..\build\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
@@ -37,6 +39,12 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+[InstallDelete]
+; остатки версий под прежним названием «PDF-мастерская»
+Type: filesandordirs; Name: "{autopf}\PDF-masterskaya"
+Type: files; Name: "{autoprograms}\PDF-мастерская.lnk"
+Type: files; Name: "{autodesktop}\PDF-мастерская.lnk"
 
 [Files]
 Source: "..\..\dist\PDFMaster\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

@@ -1,7 +1,7 @@
 # Сценарии для прогона внутри собранного .app:
 # ruff: noqa: F821  (app, win, ctx подставляет приложение)
 #   PDFM_SELFTEST_SCRIPT=packaging/selftest_scenarios.py PDFM_SELFTEST_DIR=/tmp/x \
-#     "/Applications/PDF-мастерская.app/Contents/MacOS/PDFMaster"
+#     "/Applications/PDFMaster.app/Contents/MacOS/PDFMaster"
 # Выполняется в процессе приложения (переменные app, win, ctx). Клики и ввод — события Qt.
 import os
 import shutil

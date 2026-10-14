@@ -3,7 +3,7 @@
 import os
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
-APP_NAME = "PDF-мастерская"
+APP_NAME = "PDFMaster"
 VERSION = open(os.path.join(ROOT, "pdfmaster", "resources", "VERSION")).read().strip()
 
 a = Analysis(

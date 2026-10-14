@@ -1,4 +1,4 @@
-# PDF‑мастерская
+# PDFMaster
 
 Нативная программа для macOS (Apple Silicon) для просмотра и правки PDF вместо Acrobat Pro:
 правка текста с настоящим удалением старого, листы, подписи и печати, сжатие.
@@ -9,9 +9,9 @@
 Готовые установщики — на странице последнего выпуска:
 **https://github.com/emkaraid/pdfmaster/releases/latest**
 
-* Mac (Apple Silicon): [PDF-masterskaya-mac.dmg](https://github.com/emkaraid/pdfmaster/releases/latest/download/PDF-masterskaya-mac.dmg) —
+* Mac (Apple Silicon): [PDFMaster-mac.dmg](https://github.com/emkaraid/pdfmaster/releases/latest/download/PDFMaster-mac.dmg) —
   открыть и перетащить программу в «Программы»; первый запуск — правый клик → «Открыть».
-* Windows 10/11: [PDF-masterskaya-windows-setup.exe](https://github.com/emkaraid/pdfmaster/releases/latest/download/PDF-masterskaya-windows-setup.exe) —
+* Windows 10/11: [PDFMaster-windows-setup.exe](https://github.com/emkaraid/pdfmaster/releases/latest/download/PDFMaster-windows-setup.exe) —
   если появится SmartScreen: «Подробнее» → «Выполнить в любом случае». Права администратора не нужны.
 
 Обновления: «Справка → Проверить обновления…» — программа спросит GitHub о новой версии,
@@ -19,6 +19,10 @@
 
 Подписи и печати на другой компьютер: «Подпись» → «Экспорт…» (один файл .zip) →
 на другом компьютере «Подпись» → «Импорт…».
+
+До версии 1.2 программа называлась «PDF‑мастерская»: установщики под старыми именами
+(`PDF-masterskaya-…`) по-прежнему выкладываются в каждый выпуск, старые ссылки работают,
+а подписи и печати из прежней папки переносятся сами.
 
 Новая версия выпускается меткой: `git tag v1.2.0 && git push --tags` (номер — в
 `pdfmaster/resources/VERSION`); установщики соберёт GitHub Actions.
@@ -33,10 +37,13 @@
 
 Нужен Python 3.12+ для arm64 (берётся python.org 3.14 или Homebrew из /opt/homebrew),
 для тестов — `pdftotext` (`brew install poppler`). Скрипт сам создаёт `.venv` и ставит
-зависимости из `requirements.txt`. Результат — `/Applications/PDF-мастерская.app`;
+зависимости из `requirements.txt`. Результат — `/Applications/PDFMaster.app`;
 программа появляется в «Открыть с помощью» для PDF и картинок. Чтобы PDF открывались
 двойным кликом: Finder → любой PDF → «Свойства» → «Открывать в программе» →
-«PDF‑мастерская» → «Изменить всё…».
+«PDFMaster» → «Изменить всё…».
+
+На Mac красная кнопка закрывает окно (с вопросом о несохранённых документах),
+а программа остаётся в Dock, как другие программы Mac; выход — ⌘Q.
 
 Запуск из исходников: `.venv/bin/python -m pdfmaster [файл.pdf …]`.
 
@@ -110,7 +117,7 @@
   с сохранением пропорций, верхний кружок — поворот (с прилипанием к 0/90/180/270°),
   «На все листы» / «На выбранные». Вставляется PNG с прозрачностью без потерь, одна
   копия картинки на все листы. Если у скана есть разрешение (dpi), печать встаёт
-  в натуральную величину. Библиотека: `~/Library/Application Support/PDF-мастерская/`.
+  в натуральную величину. Библиотека: `~/Library/Application Support/PDFMaster/`.
 * **Линейка (⇧⌘M):** расстояние (с углом), ломаная, площадь (с периметром); привязка
   к концам линий; ⇧ — угол кратно 15°. Масштаб берётся из файла, если AutoCAD/nanoCAD
   записали видовые экраны (/VP /Measure, например план 1:500), либо из надписи «М 1:500» на листе
