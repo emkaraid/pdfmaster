@@ -176,12 +176,47 @@ def exact_font_file(fontname: str, flags: int = 0) -> str | None:
     return _font_index().get((core, bold, italic))
 
 
+# Глифы, которые в файле шрифта есть, но нарисованы заглушкой: у osifont кириллические
+# Ё/ё (U+0401/U+0451) — чёрный прямоугольник. Рисуем их латинскими Ë/ë того же шрифта
+# (тот же рисунок), а в /ToUnicode пишем исходный символ — копируется «Ё».
+_GLYPH_ALIAS = {"osifont": {"Ё": "Ë", "ё": "ë"}}
+
+
+def glyph_cp(path: str | None, ch: str) -> int:
+    """Код символа, по которому брать глиф из файла шрифта path."""
+    if path:
+        alias = _GLYPH_ALIAS.get(os.path.splitext(os.path.basename(path))[0].lower())
+        if alias and ch in alias:
+            return ord(alias[ch])
+    return ord(ch)
+
+
 def font_covers(path: str, text: str) -> bool:
     try:
         f = load_font(path)
     except Exception:
         return False
-    return all(ch.isspace() or f.has_glyph(ord(ch)) for ch in text)
+    return all(ch.isspace() or f.has_glyph(glyph_cp(path, ch)) for ch in text)
+
+
+@lru_cache(maxsize=64)
+def cap_height(path: str) -> float | None:
+    """Высота заглавной (доля кегля), измеренная рендером буквы «Н» (или «H»)."""
+    try:
+        f = load_font(path)
+        ch = "Н" if f.has_glyph(ord("Н")) else "H"
+        if not f.has_glyph(ord(ch)):
+            return None
+        d = fitz.open()
+        pg = d.new_page(width=200, height=200)
+        pg.insert_font(fontname="m", fontfile=path)
+        pg.insert_text((20, 150), ch, fontname="m", fontsize=100)
+        pix = pg.get_pixmap(dpi=72, colorspace=fitz.csGRAY)
+        w, h, raw = pix.width, pix.height, pix.samples
+        top = next((y for y in range(h) if min(raw[y * w:(y + 1) * w]) < 128), None)
+        return (150 - top) / 100.0 if top is not None and top < 150 else None
+    except Exception:
+        return None
 
 
 def substitute_file(fontname: str, flags: int, need: str, family: str | None = None,
@@ -299,6 +334,51 @@ def _resolve_number(doc: fitz.Document, xref: int, key: str) -> float | None:
         return None
 
 
+def _inline_dict(arr_text: str) -> str | None:
+    """Текст словаря-потомка, если он записан прямо в массиве ([<< … >>]), иначе None."""
+    i = arr_text.find("<<")
+    if i < 0:
+        return None
+    depth, j = 0, i
+    while j < len(arr_text) - 1:
+        two = arr_text[j:j + 2]
+        if two == "<<":
+            depth += 1
+            j += 2
+            continue
+        if two == ">>":
+            depth -= 1
+            j += 2
+            if depth == 0:
+                return arr_text[i:j]
+            continue
+        j += 1
+    return None
+
+
+def _inline_number(d: str, key: str) -> float | None:
+    m = re.search(rf"/{key}\s+(-?[\d.]+)(?!\s+\d+\s+R)", d)
+    return float(m.group(1)) if m else None
+
+
+def _inline_array(doc: fitz.Document, d: str, key: str) -> list | None:
+    m = re.search(rf"/{key}\s+(\d+)\s+0\s+R", d)
+    if m:
+        return _parse_number_array(doc.xref_object(int(m.group(1)), compressed=True))
+    m = re.search(rf"/{key}\s*\[", d)
+    if not m:
+        return None
+    i, depth = m.end() - 1, 0
+    for j in range(i, len(d)):
+        if d[j] == "[":
+            depth += 1
+        elif d[j] == "]":
+            depth -= 1
+            if depth == 0:
+                return _parse_number_array(d[i:j + 1])
+    return None
+
+
 def _hex_to_bytes(h: bytes) -> bytes:
     h = re.sub(rb"\s", b"", h)
     if len(h) % 2:
@@ -400,6 +480,7 @@ class DocFont:
     ascender: float = 0.9
     descender: float = -0.2
     embedded: bool = True
+    cap_height: float | None = None   # /CapHeight из описания шрифта (доля кегля)
 
     def can_encode(self, text: str) -> bool:
         return all(ch in self.to_code for ch in text)
@@ -426,21 +507,26 @@ def load_docfont(doc: fitz.Document, xref: int) -> DocFont | None:
             _, enc = _get(doc, xref, "Encoding")
             if enc != "/Identity-H":
                 return None
-            desc = _resolve_array(doc, xref, "DescendantFonts")
             dt, dv = _get(doc, xref, "DescendantFonts")
-            m = re.search(r"(\d+)\s+0\s+R", dv)
-            if not m:
-                return None
-            dx = int(m.group(1))
             if dt == "xref":  # массив сам по себе косвенный
-                m2 = re.search(r"(\d+)\s+0\s+R", doc.xref_object(dx))
-                if not m2:
+                dv = doc.xref_object(int(dv.split()[0]))
+            inline = _inline_dict(dv)
+            if inline is not None:
+                # AutoCAD пишет потомка прямо в массив: [<< /W 263 0 R /FontDescriptor 264 0 R … >>]
+                dx = None
+                dw = _inline_number(inline, "DW")
+                w = _inline_array(doc, inline, "W") or []
+                m = re.search(r"/FontDescriptor\s+(\d+)\s+0\s+R", inline)
+                fd_xref = int(m.group(1)) if m else None
+            else:
+                m = re.search(r"(\d+)\s+0\s+R", dv)
+                if not m:
                     return None
-                dx = int(m2.group(1))
-            del desc
-            dw = _resolve_number(doc, dx, "DW")
+                dx = int(m.group(1))
+                dw = _resolve_number(doc, dx, "DW")
+                w = _resolve_array(doc, dx, "W") or []
+                fd_xref = None
             widths: dict[int, float] = {}
-            w = _resolve_array(doc, dx, "W") or []
             i = 0
             while i < len(w):
                 first = w[i]
@@ -454,7 +540,7 @@ def load_docfont(doc: fitz.Document, xref: int) -> DocFont | None:
                     i += 3
                 else:
                     break
-            fdx = dx
+            fdx = dx if dx is not None else xref
             two = True
             default_w = dw if dw is not None else 1000.0
         elif subtype in ("/TrueType", "/Type1", "/MMType1"):
@@ -464,6 +550,7 @@ def load_docfont(doc: fitz.Document, xref: int) -> DocFont | None:
                 return None
             widths = {int(fc) + k: float(v) for k, v in enumerate(ws) if not isinstance(v, list)}
             fdx = xref
+            fd_xref = None
             two = False
             mw = _resolve_number(doc, xref, "FontDescriptor/MissingWidth")
             default_w = mw or 0.0
@@ -500,21 +587,27 @@ def load_docfont(doc: fitz.Document, xref: int) -> DocFont | None:
                     break
         # Невстроенный простой шрифт тоже годится: исходный текст рядом нарисован им же,
         # и любой просмотрщик подставит для нового текста то же, что и для старого.
-        ft, fv = _get(doc, fdx, "FontDescriptor")
+        if fd_xref is not None:
+            fd, pre = fd_xref, ""
+        else:
+            fd, pre = fdx, "FontDescriptor/"
+        ft, _ = (("xref", "") if fd_xref is not None else _get(doc, fdx, "FontDescriptor"))
         embedded = False
         if ft in ("xref", "dict"):
             for k in ("FontFile", "FontFile2", "FontFile3"):
-                kt, _ = _get(doc, fdx, f"FontDescriptor/{k}")
+                kt, _ = _get(doc, fd, pre + k)
                 if kt == "xref":
                     embedded = True
         if not embedded and two:
             return None
-        asc = _resolve_number(doc, fdx, "FontDescriptor/Ascent")
-        dsc = _resolve_number(doc, fdx, "FontDescriptor/Descent")
+        asc = _resolve_number(doc, fd, pre + "Ascent")
+        dsc = _resolve_number(doc, fd, pre + "Descent")
+        cap = _resolve_number(doc, fd, pre + "CapHeight")
         return DocFont(xref=xref, basefont=basefont, two_byte=two, to_code=to_code,
                        widths=widths, default_width=default_w,
                        ascender=(asc / 1000.0) if asc else 0.9,
-                       descender=(dsc / 1000.0) if dsc else -0.2, embedded=embedded)
+                       descender=(dsc / 1000.0) if dsc else -0.2, embedded=embedded,
+                       cap_height=(cap / 1000.0) if cap and 200 < cap < 1000 else None)
     except Exception:
         return None
 

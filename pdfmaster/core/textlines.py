@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import re
+
 import math
 
 import pymupdf as fitz
@@ -285,12 +287,41 @@ def paragraph_of(lines: list[dict], line: dict) -> list[dict]:
         lim = l.get("limit")
         return along(l) + lim if lim else end(l)
 
-    same = [l for l in lines if l["dir"] == d and abs(l["spans"][l["chars"][0][7]]["size"] - size) < 0.6]
+    same_all = [l for l in lines if l["dir"] == d and abs(l["spans"][l["chars"][0][7]]["size"] - size) < 0.6]
+    # Маркеры списка («-», «•», «1)») MuPDF часто отдаёт отдельным сегментом слева
+    # от текста пункта — сами по себе они не строки абзаца.
+    same = [l for l in same_all if not _MARKER.fullmatch(l["text"].strip())]
 
-    def full(l):
-        return end(l) >= right(l) - 1.6 * size
+    def first_word(l) -> float:
+        """Длина первого слова строки вдоль d."""
+        a0 = along(l)
+        for c in l["chars"]:
+            if c[0] == " ":
+                return c[1] * d[0] + c[2] * d[1] - a0
+        return max(0.0, _extent(l))
 
-    def neighbour(cur, direction):
+    def full(l, nxt=None):
+        """Строка дошла до края: либо почти до него, либо первое слово следующей
+        строки на ней уже не поместилось бы (перенос из-за длинного слова)."""
+        if end(l) >= right(l) - 1.6 * size:
+            return True
+        return nxt is not None and end(l) + 0.3 * size + first_word(nxt) > right(l) + 0.2 * size
+
+    def is_item_head(l) -> bool:
+        """Первая строка пункта списка: слева на той же базовой линии стоит маркер
+        (отдельным сегментом или в начале самой строки)."""
+        if _MARKER.fullmatch(l["text"].split(" ", 1)[0]) and " " in l["text"].strip():
+            return True
+        for m in same_all:
+            if m is l or not _MARKER.fullmatch(m["text"].strip()):
+                continue
+            if abs(base(m) - base(l)) < 0.3 * size and 0 <= along(l) - end(m) < 3.0 * size:
+                return True
+        return False
+
+    def neighbour(cur, direction, hanging=False):
+        """hanging — соседняя строка пункта списка с висячим отступом: продолжение
+        начинается левее первой строки (под маркером или от края колонки)."""
         best = None
         for l in same:
             if l is cur:
@@ -298,7 +329,10 @@ def paragraph_of(lines: list[dict], line: dict) -> list[dict]:
             db = (base(cur) - base(l)) * direction  # >0 — ниже (direction=1) / выше (-1)
             if not (0.5 * size < db < 1.9 * size):
                 continue
-            if abs(along(l) - along(cur)) > 3.5 * size:
+            dx = along(l) - along(cur)
+            # висячий отступ: строка ниже начинается левее первой строки пункта, выше — правее
+            hang = hanging and 0 < -dx * direction < 9.0 * size
+            if abs(dx) > 3.5 * size and not hang:
                 continue
             if best is None or db < best[0]:
                 best = (db, l)
@@ -306,22 +340,29 @@ def paragraph_of(lines: list[dict], line: dict) -> list[dict]:
 
     res = [line]
     cur = line
-    while True:  # вверх
-        prev = neighbour(cur, -1)
-        if prev is None or not full(prev):
+    while not is_item_head(cur):  # вверх (начало пункта списка — всегда начало абзаца)
+        prev = neighbour(cur, -1, hanging=True)
+        if prev is None or not full(prev, cur):
             break
         if along(cur) - along(prev) > 0.8 * size:  # cur с абзацным отступом — начало абзаца
             break
+        if along(prev) - along(cur) > 3.5 * size and not is_item_head(prev):
+            break                      # правее, но без маркера — это не висячий отступ
         res.insert(0, prev)
         cur = prev
     cur = line
-    while full(cur):  # вниз
-        nxt = neighbour(cur, 1)
-        if nxt is None or along(nxt) - min(along(x) for x in res) > 0.8 * size:
+    while True:  # вниз
+        nxt = neighbour(cur, 1, hanging=is_item_head(res[0]))
+        if nxt is None or not full(cur, nxt):
+            break
+        if along(nxt) - min(along(x) for x in res) > 0.8 * size or is_item_head(nxt):
             break
         res.append(nxt)
         cur = nxt
     return res
+
+
+_MARKER = re.compile(r"[-–—•·▪●○*]|\d{1,3}[.)]|[а-яa-z][)]")
 
 
 def _extent(l) -> float:

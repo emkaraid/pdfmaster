@@ -372,3 +372,30 @@ def test_ui_ruler_on_plan(ui, tmp_path):
     out = tmp_path / "plan_out.pdf"
     save(app, tab, str(out))
     assert f"{expect:.2f}".replace(".", ",") in fitz.open(out)[0].get_text()
+
+
+def test_ui_ruler_relabels_when_scale_arrives(ui, tmp_path):
+    """Измерение, сделанное до прихода масштаба листа, пересчитывается в метры
+    (14.10.2026: на большом чертеже подписи оставались «155,6 мм»)."""
+    from PySide6.QtWidgets import QGraphicsSimpleTextItem
+    from tests.test_measure import _page_with_vp
+    app, ctx, win = ui
+    d, p = _page_with_vp(0.17639)
+    src = tmp_path / "plan2.pdf"
+    d.save(src)
+    win.open_paths([str(src)])
+    tab = win.tab()
+    view = tab.view
+    pump(app, until=lambda: all(it.base is not None for it, _ in view.visible_pages(0)))
+    win.set_mode("measure")
+    page = view.items_by_pid[tab.model.pages[0]["id"]]
+    tool = tab.measure
+    tool.page, tool.pts = page, [(100.0, 300.0), (400.0, 300.0)]
+    tool.finish()                                   # масштаба ещё нет — на бумаге
+    assert tab.side.measure.result.text().endswith("мм")
+    tool._ensure_snap(page)
+    assert pump(app, until=lambda: page.pid in tool.vps)
+    want = f"{300 * 25.4 / 72 * 0.5:.2f} м".replace(".", ",")
+    assert tab.side.measure.result.text() == want
+    texts = [it.text() for it in tool.done[-1]["items"] if isinstance(it, QGraphicsSimpleTextItem)]
+    assert texts == [want]

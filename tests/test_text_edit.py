@@ -1,5 +1,7 @@
 """Правка текста: настоящее удаление старого, новый текст на том же месте."""
 
+import re
+
 import numpy as np
 import pymupdf as fitz
 
@@ -221,3 +223,66 @@ def test_paragraph_fit_into_original_lines(fx, tmp_path):
     hits = [l for b in d[0].get_text("dict")["blocks"] for l in b.get("lines", [])
             if "рублей" in "".join(s["text"] for s in l["spans"]) or "облагается" in "".join(s["text"] for s in l["spans"])]
     assert hits and max(l["bbox"][3] for l in hits) <= bottom + 1.0  # не вылезло ниже исходного абзаца
+
+
+def test_list_item_with_hanging_indent_is_one_paragraph():
+    """Пункт «- текст» с продолжением от края колонки — один абзац (лист 56 из ТЗ, 14.10.2026).
+
+    Раньше продолжение, начинающееся на 4+ кегля левее первой строки, в абзац не
+    попадало: перенесённый хвост ложился поверх следующей строки."""
+    from pdfmaster.core import fonts as F
+    d = fitz.open()
+    pg = d.new_page(width=595, height=842)
+    ff = F.family_file("ptsans", False, False)
+    pg.insert_font(fontname="f", fontfile=ff)
+    fnt = fitz.Font(fontfile=ff)
+    fs, x_text, x_cont, right = 12, 100, 40, 560
+    words = ("Проектирование и строительство газопроводов из полиэтиленовых труб и реконструкция "
+             "изношенных газопроводов на объектах").split()
+    y = 100
+    for item in range(2):
+        pg.insert_text((80, y), "-", fontname="f", fontsize=fs)
+        x, line, first = x_text, [], True
+        for w in words:
+            wl = fnt.text_length(w + " ", fontsize=fs)
+            if x + wl > right:
+                pg.insert_text((x_text if first else x_cont, y), " ".join(line), fontname="f", fontsize=fs)
+                y += 1.4 * fs
+                x, line, first = x_cont, [], False
+            line.append(w)
+            x += wl
+        pg.insert_text((x_text if first else x_cont, y), " ".join(line), fontname="f", fontsize=fs)
+        y += 1.4 * fs
+    lines = extract_lines(pg)
+    heads = [ln for ln in lines if ln["text"].startswith("Проектирование")]
+    assert len(heads) == 2
+    para = paragraph_of(lines, heads[0])
+    assert len(para) >= 2 and para[0] is heads[0]
+    assert all(ln is not heads[1] for ln in para), "соседний пункт списка в абзац не входит"
+    assert paragraph_of(lines, para[-1])[0] is heads[0], "от продолжения абзац находится вверх до пункта"
+
+
+def test_type0_font_with_inline_descendant_is_reused(tmp_path):
+    """AutoCAD пишет потомка Type0 прямо в массив: /DescendantFonts [<< … >>].
+    Такой шрифт документа должен повторно использоваться, а не заменяться."""
+    from pdfmaster.core import fonts as F
+    src = tmp_path / "src.pdf"
+    d = fitz.open()
+    pg = d.new_page()
+    font = F.family_file("gost", False, False)
+    pg.insert_font(fontname="g", fontfile=font)
+    pg.insert_text((50, 100), "Проектирование 2004", fontname="g", fontsize=14)
+    d.save(src)
+    d = fitz.open(src)
+    fx = next(f[0] for f in d[0].get_fonts() if f[2] == "Type0")
+    obj = d.xref_object(fx)
+    m = re.search(r"/DescendantFonts\s*\[\s*(\d+)\s+0\s+R\s*\]", obj)
+    assert m
+    inline = d.xref_object(int(m.group(1)))
+    d.update_object(fx, obj.replace(m.group(0), f"/DescendantFonts [ {inline} ]"))
+    out = tmp_path / "inline.pdf"
+    d.save(out)
+    d = fitz.open(out)
+    assert "/DescendantFonts [ <<" in d.xref_object(fx).replace("\n", " ") or "[<<" in d.xref_object(fx)
+    df = F.load_docfont(d, fx)
+    assert df is not None and df.embedded and df.can_encode("Проектирование2004")

@@ -120,7 +120,7 @@ class Style:
         if self.docfont is not None:
             return all(self.docfont.can_encode(ch) or ch == " " for ch in text)
         fnt = self.font()
-        return all(ch == " " or fnt.has_glyph(ord(ch)) for ch in text)
+        return all(ch == " " or fnt.has_glyph(F.glyph_cp(self.fontfile, ch)) for ch in text)
 
     def advance(self, ch: str) -> float:
         if self.docfont is not None:
@@ -129,7 +129,7 @@ class Style:
             if ch == " ":
                 return 0.28 * self.size * self.hscale
             return 0.5 * self.size
-        return self.font().glyph_advance(ord(ch)) * self.size * self.hscale
+        return self.font().glyph_advance(F.glyph_cp(self.fontfile, ch)) * self.size * self.hscale
 
     def width(self, text: str) -> float:
         return sum(self.advance(ch) for ch in text)
@@ -155,7 +155,41 @@ def _span_style(pf: F.PageFonts, span: dict, sample: str, need: str) -> Style:
     if df is None or not st.can_encode(need):
         st.docfont = None
         st.fontfile = F.substitute_file(span["font"], span["flags"], need)
+        _match_substitute(pf, span, sample, st)
     return st
+
+
+def _match_substitute(pf: F.PageFonts, span: dict, sample: str, st: Style) -> None:
+    """Подгоняет замену под шрифт документа: высоту заглавных — кеглем, ширину букв — Tz.
+
+    Без этого замена того же кегля заметно крупнее или мельче соседних строк
+    (ISOCPEUR → osifont: заглавные 0,645 кегля против ~0,72)."""
+    df = pf.find(span["font"], sample)
+    if df is None or not st.fontfile:
+        return
+    k = 1.0
+    sub_cap = F.cap_height(st.fontfile)
+    if df.cap_height and sub_cap:
+        k = min(1.25, max(0.75, df.cap_height / sub_cap))
+        if abs(k - 1.0) < 0.06:   # тот же шрифт из системы или близкий — не трогаем
+            k = 1.0
+    fnt = st.font()
+    ratios = []
+    for ch in set(sample) | set(df.to_code):
+        if ch.isspace() or ch not in df.to_code:
+            continue
+        cp = F.glyph_cp(st.fontfile, ch)
+        a = fnt.glyph_advance(cp) if fnt.has_glyph(cp) else 0.0
+        if a > 0.05:
+            ratios.append(df.advance(ch, 1.0) / a)
+    h = 1.0
+    if len(ratios) >= 5:
+        ratios.sort()
+        h = min(1.4, max(0.7, ratios[len(ratios) // 2] / k))
+        if abs(h - 1.0) < 0.04:
+            h = 1.0
+    st.size = round(st.size * k, 3)
+    st.hscale = h
 
 
 def _override_style(pf: F.PageFonts, base_span: dict, sample: str, need: str, style: dict) -> Style:
@@ -286,7 +320,7 @@ class Writer:
             used = self.ctx.used_gids.setdefault(xref, {})
 
             def enc(ch):
-                gid = fnt.has_glyph(ord(ch))
+                gid = fnt.has_glyph(F.glyph_cp(path, ch))
                 if not gid:
                     return None
                 used.setdefault(gid, ch)
@@ -295,7 +329,8 @@ class Writer:
                 return f"{gid:04X}"
 
             def adv(ch):
-                return fnt.glyph_advance(ord(ch)) * size * hs if fnt.has_glyph(ord(ch)) else 0.0
+                cp = F.glyph_cp(path, ch)
+                return fnt.glyph_advance(cp) * size * hs if fnt.has_glyph(cp) else 0.0
 
         if not self._wrapped:
             page.wrap_contents()

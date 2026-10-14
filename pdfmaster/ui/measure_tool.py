@@ -172,6 +172,7 @@ class MeasureTool:
         self.done: list[dict] = []
         self.snaps: dict = {}
         self.vps: dict = {}
+        self.texts: dict = {}
         self._pending: set = set()
         self.last_seg_pt: float | None = None
         panel.changed.connect(self._relabel_all)
@@ -182,41 +183,63 @@ class MeasureTool:
     # ------------------------------------------------------------ данные листа
 
     def _ensure_snap(self, page) -> None:
+        """Масштаб листа — быстрым отдельным запросом (он нужен для подписи сразу),
+        точки привязки — следом: на больших чертежах их сбор занимает секунды."""
         pid = page.pid
         if pid in self.snaps or pid in self._pending:
             return
         ref = self.tab.model.page_ref(pid)
         self._pending.add(pid)
+        import pymupdf as fitz
 
-        def done(res, pid=pid):
+        def got_scale(res, pid=pid):
+            self.vps[pid] = [{"rect": fitz.Rect(v["rect"]), "scale": v["scale"]} for v in res[2]]
+            self.texts[pid] = res[3]
+            self._update_file_scale(pid)
+            self._relabel_all()               # измерения, сделанные до ответа, — в метрах
+            if self.pts and self.page is not None and self.page.pid == pid:
+                self._draw_live(None)
+
+        def got_snap(res, pid=pid):
             self._pending.discard(pid)
             self.snaps[pid] = _Grid(res[2])
-            import pymupdf as fitz
-            self.vps[pid] = [{"rect": fitz.Rect(v["rect"]), "scale": v["scale"]} for v in res[3]]
-            self._update_file_scale(pid)
+            if pid not in self.vps:
+                got_scale(("scale", None, res[3], []), pid)
 
         def fail(msg, pid=pid):
             self._pending.discard(pid)
             self.snaps[pid] = _Grid([])
-            self.vps[pid] = []
+            self.vps.setdefault(pid, [])
 
+        self.tab.service.submit("scale", (ref["src"], ref["idx"]), sids=[ref["src"]], priority=-6,
+                                callback=got_scale)
         self.tab.service.submit("snap", (ref["src"], ref["idx"]), sids=[ref["src"]], priority=-4,
-                                callback=done, errback=fail)
+                                callback=got_snap, errback=fail)
 
     def _update_file_scale(self, pid) -> None:
         vps = [v for v in self.vps.get(pid, []) if v["scale"] != 1]
         if vps:
             self.panel.file_scale.setText("В файле указан масштаб: " + ", ".join(f"1:{v['scale']:g}" for v in vps) +
                                           " (видовой экран AutoCAD). В режиме «авто» он и используется.")
+            return
+        n, why = M.sheet_scale(self.texts.get(pid, []))
+        if n:
+            self.panel.file_scale.setText(f"Масштаб 1:{n:g} — {why}. В режиме «авто» он и используется.")
+        elif why:
+            self.panel.file_scale.setText(why[0].upper() + why[1:] + " — выберите нужный или откалибруйте.")
         else:
             self.panel.file_scale.setText("Масштаб в файле не указан — выберите его или откалибруйте.")
 
     def scale_for(self, pid, pt) -> float:
+        """Ручной выбор → видовой экран файла под точкой → надпись «М 1:N» на листе → 1:1."""
         s = self.panel.chosen_scale()
         if s:
             return s
         found = M.scale_at(self.vps.get(pid, []), pt[0], pt[1]) if pt else None
-        return found or 1.0
+        if found and found != 1:
+            return found
+        n, _ = M.sheet_scale(self.texts.get(pid, []))
+        return n or found or 1.0
 
     # ------------------------------------------------------------ события мыши
 

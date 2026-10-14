@@ -132,6 +132,12 @@ class Worker:
             _, rid, state, path, options, page_ids = msg
             info = saver.save(self.sources, state, self.assets, path, options, page_ids=page_ids)
             return ("saved", rid, info)
+        if kind == "scale":
+            _, rid, sid, idx = msg
+            from ..core.measure import text_scales, viewports
+            page = self.sources[sid].doc[idx]
+            vps = [{"rect": list(v["rect"]), "scale": v["scale"]} for v in viewports(page)]
+            return ("scale", rid, vps, text_scales(page))
         if kind == "snap":
             _, rid, sid, idx = msg
             from ..core.measure import snap_points, viewports

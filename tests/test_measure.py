@@ -52,3 +52,21 @@ def test_snap_points_and_dimension_in_pdf(tmp_path):
     t = fitz.open(out)[0].get_text()
     assert label in t
     assert abs(float(label.split()[0].replace(",", ".")) - 300 * 25.4 / 72 * 0.5) < 0.01
+
+
+def test_scale_from_sheet_text():
+    """Масштаб по надписи «М 1:500», если в файле его нет; у профиля (1:500 / 1:100) — не угадываем."""
+    from pdfmaster.core import fonts as F
+    d = fitz.open()
+    ff = F.family_file("ptsans", False, False)
+    plan = d.new_page()
+    plan.insert_font(fontname="f", fontfile=ff)
+    plan.insert_text((50, 800), "План трассы М 1:500", fontname="f", fontsize=10)
+    prof = d.new_page()
+    prof.insert_font(fontname="f", fontfile=ff)
+    prof.insert_text((50, 100), "М 1:500 по горизонтали", fontname="f", fontsize=10)
+    prof.insert_text((50, 120), "М 1:100 по вертикали", fontname="f", fontsize=10)
+    n, why = M.sheet_scale(M.text_scales(d[0]))
+    assert n == 500 and "1:500" in why
+    n, why = M.sheet_scale(M.text_scales(d[1]))
+    assert n is None and "1:100" in why and "1:500" in why

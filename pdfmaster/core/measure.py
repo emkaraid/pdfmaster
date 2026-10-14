@@ -114,6 +114,46 @@ def scale_at(vps: list[dict], x: float, y: float) -> float | None:
     return None
 
 
+_SCALE_RE = re.compile(r"(?:^|[\s(«\"])(?:[МM]|[Мм]асштаб)\.?\s*1\s*:\s*(\d{2,5})(?!\d)")
+
+
+def text_scales(page: fitz.Page) -> list[dict]:
+    """Масштабы, подписанные на листе текстом: «М 1:500», «Масштаб 1:1000».
+
+    [{'scale': 500, 'axis': None|'h'|'v', 'text': 'М 1:500'}]. axis — если рядом
+    сказано «по горизонтали/по вертикали» (профили)."""
+    out = []
+    try:
+        blocks = page.get_text("dict")["blocks"]
+    except Exception:
+        return out
+    for bl in blocks:
+        for ln in bl.get("lines", ()):
+            t = "".join(sp["text"] for sp in ln["spans"]).strip()
+            for m in _SCALE_RE.finditer(" " + t):
+                n = int(m.group(1))
+                if not 10 <= n <= 100000:
+                    continue
+                tail = t.lower()
+                axis = "v" if "вертик" in tail else ("h" if "горизонт" in tail else None)
+                out.append({"scale": float(n), "axis": axis, "text": m.group(0).strip(" («\"")})
+    return out
+
+
+def sheet_scale(texts: list[dict]) -> tuple[float | None, str]:
+    """Масштаб по надписям на листе: (N, откуда) или (None, подсказка).
+
+    Берём, только если он однозначен: один масштаб (кроме «по вертикали»)."""
+    plan = sorted({t["scale"] for t in texts if t["axis"] != "v"})
+    allv = sorted({t["scale"] for t in texts})
+    if len(plan) == 1 and len(allv) == 1:
+        t = next(t for t in texts if t["scale"] == plan[0])
+        return plan[0], f"надпись «{t['text']}» на листе"
+    if allv:
+        return None, "на листе подписаны масштабы " + ", ".join(f"1:{n:g}" for n in allv)
+    return None, ""
+
+
 def snap_points(page: fitz.Page, limit: int = 400000) -> list[float]:
     """Концы отрезков и углы прямоугольников (плоский список x,y в неповёрнутых координатах)."""
     out: list[float] = []
