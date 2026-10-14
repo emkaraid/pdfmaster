@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 import numpy as np
 import pymupdf as fitz
@@ -10,6 +11,8 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# настройки (недавние файлы, папки) — во временный файл, а не в настройки программы на этом Mac
+os.environ.setdefault("PDFM_SETTINGS", os.path.join(tempfile.mkdtemp(prefix="pdfm-settings-"), "settings.ini"))
 
 from tests.make_fixtures import make_all  # noqa: E402
 

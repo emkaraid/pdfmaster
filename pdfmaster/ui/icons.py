@@ -132,25 +132,38 @@ def _draw(name: str, p: QPainter, c: QColor) -> None:
     elif name == "paragraph":
         for y in (6, 10, 14, 18):
             p.drawLine(P(4, y), P(20 if y < 18 else 13, y))
+    elif name == "page":
+        path = QPainterPath(P(6, 3)); path.lineTo(14, 3); path.lineTo(19, 8); path.lineTo(19, 21)
+        path.lineTo(6, 21); path.closeSubpath()
+        p.drawPath(path)
+        path = QPainterPath(P(14, 3)); path.lineTo(14, 8); path.lineTo(19, 8)
+        p.drawPath(path)
+        p.drawLine(P(9, 13), P(16, 13)); p.drawLine(P(9, 16.5), P(14, 16.5))
     else:
         p.drawRect(QRectF(4, 4, 16, 16))
 
 
-def icon(name: str, white: bool = False) -> QIcon:
-    key = (name, "#ffffff" if white else QGuiApplication.palette().color(QPalette.WindowText).name())
+def icon(name: str, white: bool = False, on: str | None = None) -> QIcon:
+    """Иконка цвета текста (или белая). on — цвет для включённого состояния
+    (активный режим на панели инструментов)."""
+    key = (name, "#ffffff" if white else QGuiApplication.palette().color(QPalette.WindowText).name(), on)
     if key in _cache:
         return _cache[key]
     ic = QIcon()
-    for disabled in (False, True):
+    states = [(False, QIcon.Normal, QIcon.Off), (True, QIcon.Disabled, QIcon.Off)]
+    if on:
+        states.append((False, QIcon.Normal, QIcon.On))
+    for disabled, mode, state in states:
         for scale in (1, 2):
             pm = QPixmap(24 * scale, 24 * scale)
             pm.setDevicePixelRatio(scale)
             pm.fill(Qt.transparent)
             p = QPainter(pm)
             p.setRenderHint(QPainter.Antialiasing)
-            _draw(name, p, QColor("#ffffff") if white else _ink(disabled))
+            ink = QColor("#ffffff") if white else (QColor(on) if state == QIcon.On else _ink(disabled))
+            _draw(name, p, ink)
             p.end()
-            ic.addPixmap(pm, QIcon.Disabled if disabled else QIcon.Normal)
+            ic.addPixmap(pm, mode, state)
     _cache[key] = ic
     return ic
 

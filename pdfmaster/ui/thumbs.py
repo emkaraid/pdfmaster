@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QListView, QListWidget, QListW
                                QStyledItemDelegate)
 
 from ..core.ops import page_format
-from . import icons
+from . import icons, theme
 
 PID = Qt.UserRole + 1
 LABEL_H = 18
@@ -67,8 +67,8 @@ class _Delegate(QStyledItemDelegate):
         p.setRenderHint(QPainter.Antialiasing, True)
         if sel:
             p.setPen(Qt.NoPen)
-            p.setBrush(QColor(47, 111, 214, 40))
-            p.drawRoundedRect(QRectF(r).adjusted(4, 2, -4, -2), 8, 8)
+            p.setBrush(theme.color("accent_tint"))
+            p.drawRoundedRect(QRectF(r).adjusted(4, 2, -4, -2), 10, 10)
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(0, 0, 0, 30))
         p.drawRect(box.adjusted(-1, 0, 1, 2))
@@ -82,7 +82,7 @@ class _Delegate(QStyledItemDelegate):
             self.panel.request(pid)
         if sel or cur:
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor(47, 111, 214) if sel else QColor(140, 150, 165), 2.4 if sel else 1.4))
+            p.setPen(QPen(theme.color("accent") if sel else theme.color("text3"), 2.4 if sel else 1.4))
             p.drawRect(box.adjusted(-1.5, -1.5, 1.5, 1.5))
         if self.panel.grid and hover:
             for name, br in self.buttons(r, pid).items():
@@ -127,6 +127,7 @@ class ThumbPanel(QListWidget):
         self._pix: dict = {}
         self._pending: set = set()
         self._gap: int | None = None  # позиция «+» для вставки между листами
+        self.setObjectName("thumbs")
         self.setItemDelegate(_Delegate(self))
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setDragDropMode(QAbstractItemView.InternalMove)

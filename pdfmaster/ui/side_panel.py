@@ -14,18 +14,16 @@ PRESET_COLORS = ["#000000", "#1a3fa3", "#c0262d", "#1d7a35"]
 
 
 def _title(text: str) -> QLabel:
+    """Заголовок раздела панели (стиль — в ui/theme.py, role=title)."""
     lb = QLabel(text)
-    f = lb.font()
-    f.setBold(True)
-    f.setPointSizeF(f.pointSizeF() + 1)
-    lb.setFont(f)
+    lb.setProperty("role", "title")
     return lb
 
 
 def _hint(text: str) -> QLabel:
     lb = QLabel(text)
     lb.setWordWrap(True)
-    lb.setStyleSheet("color: palette(mid); font-size: 11px;")
+    lb.setProperty("role", "hint")
     return lb
 
 
@@ -167,7 +165,7 @@ class TextProps(QWidget):
 
     def set_hint(self, text: str, warn: bool = False) -> None:
         self.hint.setText(text)
-        self.hint.setStyleSheet("color: #c0262d; font-size: 11px;" if warn else "color: palette(mid); font-size: 11px;")
+        self.hint.setStyleSheet("color: #c0262d; font-size: 11px;" if warn else "")
         self.hint.setVisible(bool(text))
 
     def _set_color(self, c: str) -> None:
@@ -316,9 +314,12 @@ class PagesPanel(QWidget):
                 ("extract", "extract", "Извлечь в отдельный PDF…", "Выбранные листы"),
                 ("split", "split", "Разделить документ…", "По диапазонам или каждые N листов"),
                 ("delete", "trash", "Удалить листы", "Выбранные листы (или текущий)")):
-            b = QPushButton(icons.icon(ic), text)
+            b = QPushButton(icons.icon(ic), "  " + text)
             b.setToolTip(tip)
-            b.setStyleSheet("text-align: left; padding: 5px 8px;")
+            b.setProperty("listitem", True)
+            if key == "delete":
+                b.setProperty("danger", True)
+            b.setCursor(Qt.PointingHandCursor)
             b.clicked.connect(lambda _=False, k=key: self.action.emit(k))
             lay.addWidget(b)
         lay.addSpacing(8)
@@ -370,7 +371,7 @@ class SidePanel(QScrollArea):
         inner = QWidget()
         inner.setObjectName("propsPanel")
         lay = QVBoxLayout(inner)
-        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setContentsMargins(16, 16, 16, 16)
         self.stack = QStackedWidget()
         self.text = TextProps()
         self.stamps = StampPanel()

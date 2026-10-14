@@ -529,7 +529,8 @@ class PageView(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.NoAnchor)
         self.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         self.setFrameShape(QGraphicsView.NoFrame)
-        self.setBackgroundBrush(QColor("#e9ebef") if not tab.dark else QColor("#2b2d31"))
+        from . import theme
+        self.setBackgroundBrush(theme.color("canvas"))
         self.setMouseTracking(True)
         self.viewport().setAttribute(Qt.WA_AcceptTouchEvents, False)
         self.grabGesture(Qt.PinchGesture)

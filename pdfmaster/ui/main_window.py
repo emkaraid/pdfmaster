@@ -3,20 +3,36 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QObject, QSettings, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QPalette
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow,
-                               QMessageBox, QPushButton, QSizePolicy, QSpinBox, QStackedWidget, QTabWidget,
-                               QToolBar, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QPalette, QPixmap
+from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel,
+                               QMainWindow, QMessageBox, QPushButton, QSizePolicy, QSpinBox, QStackedWidget,
+                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from ..core.library import Library
 from ..core.model import DocModel
 from ..core.saver import COMPRESS
 from ..render.service import RenderService
-from . import icons
+from . import icons, theme
 from .doc_tab import OPEN_FILTER, DocTab, open_model
 
 APP_TITLE = "PDF‑мастерская"
+
+# Что делать в каждом режиме — одной строкой внизу окна, пока режим включён.
+MODE_HINTS = {
+    "select": ("Выбор", ("Протяните по тексту — выделение, ⌘C — копировать. Подписи и печати двигаются мышью, "
+                         "на пустом месте лист тянется «рукой».")),
+    "edit": ("Правка текста", ("Наведите на строку и кликните — правка на месте. Enter — готово, Esc — отмена. "
+                               "Длинный текст сам переносится по абзацу.")),
+    "addtext": ("Новый текст", "Кликните в любое место листа и печатайте. Enter — новая строка, Esc — готово."),
+    "erase": ("Стереть", "Обведите рамкой, что убрать: текст, картинки и линии внутри рамки удалятся."),
+    "stamp": ("Подпись и печать", ("Выберите подпись справа и кликните на листе. Угол — размер, "
+                                   "кружок сверху — поворот.")),
+    "measure": ("Линейка", ("Кликните в начало и конец. Для ломаной и площади — несколько кликов, "
+                            "двойной клик — готово. ⇧ — угол кратно 15°.")),
+    "organize": ("Листы", ("Перетаскивайте листы, наведите на лист — повернуть или удалить, "
+                           "«+» между листами — вставить.")),
+}
 
 
 class AppContext(QObject):
@@ -26,7 +42,9 @@ class AppContext(QObject):
 
     def __init__(self):
         super().__init__()
-        self.settings = QSettings("PDFMaster", "PDF-masterskaya")
+        # PDFM_SETTINGS — отдельный файл настроек (автотесты не трогают настройки программы)
+        alt = os.environ.get("PDFM_SETTINGS")
+        self.settings = QSettings(alt, QSettings.IniFormat) if alt else QSettings("PDFMaster", "PDF-masterskaya")
         self.service = RenderService()
         self.library = Library()
         pal = QGuiApplication.palette()
@@ -53,7 +71,8 @@ class AppContext(QObject):
         v = self.settings.value("recent", [])
         if isinstance(v, str):
             v = [v]
-        return [p for p in (v or []) if os.path.exists(p)]
+        # «pytest-of-» — следы старых автотестов, писавших в настройки программы
+        return [p for p in (v or []) if os.path.exists(p) and "/pytest-of-" not in p]
 
     def add_recent(self, path: str) -> None:
         r = [p for p in self.recent() if p != path]
@@ -81,67 +100,139 @@ class Toast(QLabel):
         self._t.start(ms)
 
 
+class DropZone(QFrame):
+    """Пунктирная зона «перетащите сюда» на стартовом экране (подсвечивается при перетаскивании)."""
+
+    def __init__(self, win: MainWindow):
+        super().__init__()
+        self.setObjectName("dropZone")
+        self.setMinimumHeight(170)
+        self.setCursor(Qt.PointingHandCursor)
+        self.win = win
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 22)
+        lay.setSpacing(6)
+        ic = QLabel()
+        ic.setAlignment(Qt.AlignCenter)
+        ic.setPixmap(icons.icon("open", on=None).pixmap(QSize(34, 34)))
+        t = QLabel("Перетащите PDF сюда")
+        t.setObjectName("dropTitle")
+        t.setAlignment(Qt.AlignCenter)
+        sub = QLabel("или кликните, чтобы выбрать файл · можно сразу несколько — откроются во вкладках")
+        sub.setObjectName("dropSub")
+        sub.setAlignment(Qt.AlignCenter)
+        sub.setWordWrap(True)
+        lay.addStretch(1)
+        lay.addWidget(ic)
+        lay.addWidget(t)
+        lay.addWidget(sub)
+        lay.addStretch(1)
+
+    def set_active(self, on: bool) -> None:
+        self.setProperty("active", "true" if on else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mouseReleaseEvent(self, e) -> None:
+        if e.button() == Qt.LeftButton:
+            self.win.open_dialog()
+
+
 class EmptyState(QWidget):
+    """Стартовый экран: карточка с зоной перетаскивания, кнопками и недавними файлами."""
+
     def __init__(self, win: "MainWindow"):
         super().__init__()
-        lay = QVBoxLayout(self)
-        lay.addStretch(1)
-        t = QLabel(APP_TITLE)
-        f = t.font()
-        f.setPointSize(24)
-        f.setBold(True)
-        t.setFont(f)
-        t.setAlignment(Qt.AlignCenter)
-        s = QLabel("Перетащите сюда PDF (или несколько — откроются во вкладках)\nили нажмите «Открыть».\n"
-                   "Файлы никуда не отправляются: всё работает на этом Mac, без интернета.")
-        s.setAlignment(Qt.AlignCenter)
-        s.setStyleSheet("color: palette(mid);")
-        b = QPushButton(icons.icon("open"), "Открыть PDF…")
-        b.setMinimumWidth(180)
-        b.clicked.connect(win.open_dialog)
-        m = QPushButton(icons.icon("merge"), "Объединить файлы…")
-        m.setMinimumWidth(180)
-        m.clicked.connect(win.merge_dialog)
+        self.setObjectName("welcome")
+        self.win = win
+        outer = QVBoxLayout(self)
+        outer.addStretch(1)
         row = QHBoxLayout()
         row.addStretch(1)
-        row.addWidget(b)
-        row.addWidget(m)
-        row.addStretch(1)
-        lay.addWidget(t)
-        lay.addSpacing(8)
-        lay.addWidget(s)
+        card = QFrame()
+        card.setObjectName("welcomeCard")
+        card.setMinimumWidth(560)
+        card.setMaximumWidth(640)
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(36, 32, 36, 28)
+        lay.setSpacing(0)
+        head = QHBoxLayout()
+        logo = QLabel()
+        from ..core.fonts import resource_dir
+        pm = QPixmap(os.path.join(resource_dir(), "icon.png"))
+        if not pm.isNull():
+            dpr = self.devicePixelRatioF() or 2.0
+            pm = pm.scaled(int(56 * dpr), int(56 * dpr), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pm.setDevicePixelRatio(dpr)
+            logo.setPixmap(pm)
+        head.addWidget(logo)
+        head.addSpacing(14)
+        tt = QVBoxLayout()
+        tt.setSpacing(2)
+        t = QLabel(APP_TITLE)
+        t.setObjectName("welcomeTitle")
+        sub = QLabel("Правка PDF прямо на месте: текст, листы, подписи и печати, линейка для чертежей.\n"
+                     "Всё работает на этом Mac, файлы никуда не отправляются.")
+        sub.setObjectName("welcomeSub")
+        sub.setWordWrap(True)
+        tt.addWidget(t)
+        tt.addWidget(sub)
+        head.addLayout(tt, 1)
+        lay.addLayout(head)
+        lay.addSpacing(22)
+        self.drop = DropZone(win)
+        lay.addWidget(self.drop)
         lay.addSpacing(16)
-        lay.addLayout(row)
+        btns = QHBoxLayout()
+        b = QPushButton(icons.icon("open", white=True), "  Открыть PDF…")
+        b.setProperty("primary", True)
+        b.setCursor(Qt.PointingHandCursor)
+        b.clicked.connect(win.open_dialog)
+        m = QPushButton(icons.icon("merge"), "  Объединить файлы…")
+        m.setCursor(Qt.PointingHandCursor)
+        m.clicked.connect(win.merge_dialog)
+        btns.addWidget(b)
+        btns.addWidget(m)
+        btns.addStretch(1)
+        lay.addLayout(btns)
+        self.recent_title = QLabel("НЕДАВНИЕ")
+        self.recent_title.setProperty("role", "section")
+        lay.addSpacing(20)
+        lay.addWidget(self.recent_title)
+        lay.addSpacing(6)
         self.recent_box = QVBoxLayout()
-        lay.addSpacing(18)
+        self.recent_box.setSpacing(2)
         lay.addLayout(self.recent_box)
-        lay.addStretch(2)
-        self.win = win
+        row.addWidget(card)
+        row.addStretch(1)
+        outer.addLayout(row)
+        outer.addStretch(2)
 
     def refresh(self) -> None:
         while self.recent_box.count():
             it = self.recent_box.takeAt(0)
             if it.widget():
                 it.widget().deleteLater()
-        rec = self.win.ctx.recent()[:6]
-        if rec:
-            lb = QLabel("Недавние:")
-            lb.setAlignment(Qt.AlignCenter)
-            lb.setStyleSheet("color: palette(mid);")
-            self.recent_box.addWidget(lb)
+        rec = self.win.ctx.recent()[:5]
+        self.recent_title.setVisible(bool(rec))
+        home = os.path.expanduser("~")
         for p in rec:
-            b = QPushButton(os.path.basename(p))
-            b.setFlat(True)
+            folder = os.path.dirname(p)
+            if folder.startswith(home):
+                folder = "~" + folder[len(home):]
+            b = QPushButton(icons.icon("page"), f"  {os.path.basename(p)}    ·  {folder}")
+            b.setProperty("recent", True)
             b.setToolTip(p)
-            b.setStyleSheet("color: palette(link);")
+            b.setCursor(Qt.PointingHandCursor)
             b.clicked.connect(lambda _=False, p=p: self.win.open_paths([p]))
-            self.recent_box.addWidget(b, 0, Qt.AlignCenter)
+            self.recent_box.addWidget(b)
 
 
 class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext):
         super().__init__()
         self.ctx = ctx
+        theme.apply(QApplication.instance())
         self.setWindowTitle(APP_TITLE)
         self.setUnifiedTitleAndToolBarOnMac(True)
         self.setAcceptDrops(True)
@@ -150,7 +241,9 @@ class MainWindow(QMainWindow):
         if g is not None:
             self.restoreGeometry(g)
         self.stack = QStackedWidget()
+        self.stack.setObjectName("rootStack")
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("docTabs")
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
@@ -170,6 +263,7 @@ class MainWindow(QMainWindow):
         ctx.organizerRequested.connect(self.show_organizer)
         self.empty.refresh()
         self._update_actions()
+        self._update_mode_hint()
 
     # ------------------------------------------------------------ действия
 
@@ -225,6 +319,7 @@ class MainWindow(QMainWindow):
         self.a_thumbs.setChecked(True)
         self.a_side = A("Панель свойств", self._toggle_side, QKeySequence("Alt+Ctrl+2"), checkable=True)
         self.a_side.setChecked(True)
+        self._mode_icons: dict[str, str] = {}
         self.mode_group = QActionGroup(self)
         self.mode_group.setExclusive(True)
         self.a_modes = {}
@@ -239,12 +334,15 @@ class MainWindow(QMainWindow):
                 ("measure", "Линейка", "ruler", "Ctrl+Shift+M",
                  "Измерить расстояние, длину ломаной или площадь в масштабе чертежа (⇧⌘M)")):
             a = A(text, lambda _=False, k=key: self.set_mode(k), sc, ic, tip, checkable=True)
+            a.setIcon(icons.icon(ic, on=theme.tokens()["accent"]))
+            self._mode_icons[key] = ic
             self.mode_group.addAction(a)
             self.a_modes[key] = a
         self.a_modes["select"].setChecked(True)
         self.a_organize = A("Систематизировать листы", lambda: self.show_organizer(self.a_organize.isChecked()),
                             QKeySequence("Ctrl+Shift+P"), "grid",
                             "Все листы крупно: переставить, повернуть, удалить, вставить (⇧⌘P)", checkable=True)
+        self.a_organize.setIcon(icons.icon("grid", on=theme.tokens()["accent"]))
         self.a_rot = A("Повернуть по часовой", lambda: t() and t().rotate_pages(t().target_pids_any(), 90),
                        QKeySequence("Ctrl+R"), "rotate", "Повернуть листы по часовой (⌘R)")
         self.a_rotl = A("Повернуть против часовой", lambda: t() and t().rotate_pages(t().target_pids_any(), 270),
@@ -317,68 +415,143 @@ class MainWindow(QMainWindow):
         h = mb.addMenu("Справка")
         h.addAction(self._act("О программе", self._about))
 
+    def _pill(self, *items) -> QFrame:
+        """Группа маленьких кнопок в общей «таблетке» (масштаб, отмена/возврат)."""
+        f = QFrame()
+        f.setObjectName("pill")
+        lay = QHBoxLayout(f)
+        lay.setContentsMargins(3, 2, 3, 2)
+        lay.setSpacing(0)
+        for it in items:
+            if isinstance(it, QAction):
+                b = QToolButton()
+                b.setDefaultAction(it)
+                b.setIconSize(QSize(18, 18))
+                b.setToolButtonStyle(Qt.ToolButtonIconOnly)
+                lay.addWidget(b)
+            else:
+                lay.addWidget(it)
+        return f
+
     def _build_toolbar(self) -> None:
         tb = QToolBar("Инструменты")
         tb.setMovable(False)
-        tb.setIconSize(QSize(22, 22))
+        tb.setIconSize(QSize(20, 20))
         tb.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         tb.setObjectName("main")
         self.addToolBar(Qt.TopToolBarArea, tb)
+        # файл: «Сохранить» с меню (как… / сжать) — три кнопки в одной
         tb.addAction(self.a_open)
         tb.addAction(self.a_save)
-        tb.addAction(self.a_save_as)
-        tb.addAction(self.a_optimize)
+        from PySide6.QtWidgets import QMenu
+        sm = QMenu(self)
+        sm.addAction(self.a_save_as)
+        sm.addAction(self.a_optimize)
+        sm.addSeparator()
+        cm = sm.addMenu("Сжимать при сохранении")
+        for a in self.a_compress.values():
+            cm.addAction(a)
+        w = tb.widgetForAction(self.a_save)
+        if w is not None:
+            w.setMenu(sm)
+            w.setPopupMode(QToolButton.MenuButtonPopup)
+        self.save_menu = sm
         tb.addSeparator()
+        # режимы — одна группа, активный подсвечен фирменным цветом
         for a in self.a_modes.values():
             tb.addAction(a)
         tb.addAction(self.a_organize)
         tb.addSeparator()
-        tb.addAction(self.a_undo)
-        tb.addAction(self.a_redo)
-        tb.addSeparator()
-        tb.addAction(self.a_zoom_out)
+        tb.addWidget(self._pill(self.a_undo, self.a_redo))
+        gap = QWidget()
+        gap.setFixedWidth(8)
+        tb.addWidget(gap)
         self.zoom_lbl = QToolButton()
+        self.zoom_lbl.setObjectName("zoomLbl")
         self.zoom_lbl.setText("100 %")
         self.zoom_lbl.setToolTip("Фактический размер (⌘0)")
-        self.zoom_lbl.setMinimumWidth(58)
+        self.zoom_lbl.setMinimumWidth(54)
         self.zoom_lbl.setAutoRaise(True)
         self.zoom_lbl.clicked.connect(self.a_zoom_100.trigger)
-        tb.addWidget(self.zoom_lbl)
-        tb.addAction(self.a_zoom_in)
-        tb.addAction(self.a_fit_w)
-        tb.addAction(self.a_fit_p)
+        tb.addWidget(self._pill(self.a_zoom_out, self.zoom_lbl, self.a_zoom_in, self.a_fit_w, self.a_fit_p))
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
         tb.addAction(self.a_find)
-        # масштаб, отмена/возврат и поиск — только значками (подсказки остаются)
-        for a in (self.a_undo, self.a_redo, self.a_zoom_out, self.a_zoom_in, self.a_fit_w, self.a_fit_p, self.a_find):
+        w = tb.widgetForAction(self.a_find)
+        if w is not None:
+            w.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        for a, short in ((self.a_organize, "Листы"), (self.a_modes["edit"], "Править"),
+                         (self.a_modes["addtext"], "Текст"), (self.a_modes["erase"], "Стереть"),
+                         (self.a_modes["stamp"], "Подпись")):
+            a.setIconText(short)
+        for a in (*self.a_modes.values(), self.a_organize, self.a_open, self.a_save):
             w = tb.widgetForAction(a)
             if w is not None:
-                w.setToolButtonStyle(Qt.ToolButtonIconOnly)
-
-        for a, short in ((self.a_organize, "Листы"), (self.a_optimize, "Оптимизировать"),
-                         (self.a_modes["edit"], "Править"), (self.a_modes["addtext"], "Текст"),
-                         (self.a_modes["erase"], "Стереть"), (self.a_modes["stamp"], "Подпись")):
-            a.setIconText(short)
+                w.setCursor(Qt.PointingHandCursor)
+                w.setMinimumWidth(58)
         self.toolbar = tb
 
     def _build_status(self) -> None:
         sb = self.statusBar()
+        sb.setSizeGripEnabled(False)
+        left = QWidget()
+        ll = QHBoxLayout(left)
+        ll.setContentsMargins(8, 2, 0, 2)
+        ll.setSpacing(6)
+        self.mode_name = QLabel("")
+        self.mode_name.setObjectName("modeName")
+        self.mode_hint = QLabel("")
+        self.mode_hint.setObjectName("modeHint")
+        self.mode_hint.setMinimumWidth(10)
+        self.mode_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        ll.addWidget(self.mode_name)
+        ll.addWidget(self.mode_hint, 1)
+        sb.addWidget(left, 1)
+        self.status_info = QLabel("")
+        sb.addPermanentWidget(self.status_info)
         w = QWidget()
         lay = QHBoxLayout(w)
         lay.setContentsMargins(0, 0, 8, 0)
+        lay.setSpacing(4)
+        prev = QToolButton()
+        prev.setIcon(icons.icon("up"))
+        prev.setToolTip("Предыдущий лист")
+        prev.clicked.connect(lambda: self.tab() and self.tab().view.go_to_page(max(0, self.tab().view.current_page() - 1)))
+        nxt = QToolButton()
+        nxt.setIcon(icons.icon("down"))
+        nxt.setToolTip("Следующий лист")
+        nxt.clicked.connect(lambda: self.tab() and self.tab().view.go_to_page(
+            min(len(self.tab().model.pages) - 1, self.tab().view.current_page() + 1)))
         lay.addWidget(QLabel("Лист"))
+        lay.addWidget(prev)
         self.page_spin = QSpinBox()
         self.page_spin.setRange(1, 1)
         self.page_spin.setKeyboardTracking(False)
+        self.page_spin.setAlignment(Qt.AlignCenter)
+        self.page_spin.setMinimumWidth(46)
+        self.page_spin.setFixedHeight(22)
+        self.page_spin.setObjectName("pageSpin")
         self.page_spin.valueChanged.connect(lambda v: self.tab() and self.tab().view.go_to_page(v - 1))
         lay.addWidget(self.page_spin)
+        lay.addWidget(nxt)
         self.page_total = QLabel("из 1")
         lay.addWidget(self.page_total)
         sb.addPermanentWidget(w)
-        self.status_info = QLabel("")
-        sb.addWidget(self.status_info, 1)
+        self.page_nav = w
+
+    def _update_mode_hint(self) -> None:
+        t = self.tab()
+        if t is None:
+            self.mode_name.hide()
+            self.mode_hint.setText("")
+            return
+        key = "organize" if self.a_organize.isChecked() else self._current_mode()
+        name, hint = MODE_HINTS.get(key, ("", ""))
+        self.mode_name.setText(name)
+        self.mode_name.setVisible(bool(name))
+        self.mode_hint.setText(hint)
+        self.mode_hint.setToolTip(hint)
 
     # ------------------------------------------------------------ вкладки
 
@@ -433,6 +606,7 @@ class MainWindow(QMainWindow):
             self.a_organize.setChecked(t.organizer_shown())
             t.view.schedule_render()
         self._update_actions()
+        self._update_mode_hint()
 
     def close_tab(self, i: int) -> None:
         if i < 0:
@@ -446,6 +620,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.empty)
             self.empty.refresh()
         self._update_actions()
+        self._update_mode_hint()
 
     # ------------------------------------------------------------ открытие
 
@@ -509,8 +684,15 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, e) -> None:
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
+            if self.stack.currentWidget() is self.empty:
+                self.empty.drop.set_active(True)
+
+    def dragLeaveEvent(self, e) -> None:
+        self.empty.drop.set_active(False)
+        super().dragLeaveEvent(e)
 
     def dropEvent(self, e) -> None:
+        self.empty.drop.set_active(False)
         paths = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
         paths = [p for p in paths if os.path.isfile(p)]
         if not paths:
@@ -534,6 +716,7 @@ class MainWindow(QMainWindow):
         if t is not None:
             t.show_organizer(on)
         self._update_actions()
+        self._update_mode_hint()
 
     def set_mode(self, mode: str) -> None:
         if self.a_organize.isChecked():
@@ -544,6 +727,7 @@ class MainWindow(QMainWindow):
         t = self.tab()
         if t is not None and t.mode != mode:
             t.set_mode(mode)
+        self._update_mode_hint()
 
     def _select_all(self) -> None:
         t = self.tab()
@@ -580,6 +764,8 @@ class MainWindow(QMainWindow):
                   self.a_fit_p, self.a_goto, self.a_rot, self.a_rotl, self.a_blank, self.a_insert, self.a_delpages,
                   self.a_delete, self.a_organize, *self.a_modes.values()):
             a.setEnabled(has)
+        if hasattr(self, "page_nav"):
+            self.page_nav.setVisible(has)
         editing = has and t.view.editing is not None
         self.a_undo.setEnabled(has and (t.model.can_undo() or editing))
         self.a_redo.setEnabled(has and (t.model.can_redo() or editing))
@@ -624,6 +810,21 @@ class MainWindow(QMainWindow):
                           f"интерфейс: Qt {qtv}.<br>Шрифты: PT Serif/PT Sans (OFL), Liberation (OFL), "
                           f"osifont (LGPL с исключением для шрифтов).<br>"
                           f"Библиотека подписей: ~/Library/Application Support/PDF-мастерская/")
+
+    def changeEvent(self, e) -> None:
+        super().changeEvent(e)
+        if e.type() in (QEvent.ApplicationPaletteChange, QEvent.ThemeChange) and not getattr(self, "_retheming", False):
+            # светлая/тёмная тема macOS переключилась — перекрасить всё
+            self._retheming = True
+            try:
+                icons.clear_cache()
+                theme.apply(QApplication.instance())
+                acc = theme.tokens()["accent"]
+                for k, a in self.a_modes.items():
+                    a.setIcon(icons.icon(self._mode_icons[k], on=acc))
+                self.a_organize.setIcon(icons.icon("grid", on=acc))
+            finally:
+                self._retheming = False
 
     def resizeEvent(self, e) -> None:
         super().resizeEvent(e)
