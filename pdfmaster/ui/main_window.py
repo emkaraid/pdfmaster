@@ -458,7 +458,6 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QMenu
         sm = QMenu(self)
         sm.addAction(self.a_save_as)
-        sm.addAction(self.a_optimize)
         sm.addSeparator()
         cm = sm.addMenu("Сжимать при сохранении")
         for a in self.a_compress.values():
@@ -489,17 +488,20 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
+        # справа — отдельные кнопки для готового документа: оптимизировать и распечатать
+        tb.addAction(self.a_optimize)
         tb.addAction(self.a_print)
+        tb.addSeparator()
         tb.addAction(self.a_find)
-        for a in (self.a_print, self.a_find):
-            w = tb.widgetForAction(a)
-            if w is not None:
-                w.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        w = tb.widgetForAction(self.a_find)
+        if w is not None:
+            w.setToolButtonStyle(Qt.ToolButtonIconOnly)
         for a, short in ((self.a_organize, "Листы"), (self.a_modes["edit"], "Править"),
                          (self.a_modes["addtext"], "Текст"), (self.a_modes["erase"], "Стереть"),
-                         (self.a_modes["stamp"], "Подпись")):
+                         (self.a_modes["stamp"], "Подпись"), (self.a_optimize, "Оптимизировать"),
+                         (self.a_print, "Печать")):
             a.setIconText(short)
-        for a in (*self.a_modes.values(), self.a_organize, self.a_open, self.a_save):
+        for a in (*self.a_modes.values(), self.a_organize, self.a_open, self.a_save, self.a_optimize, self.a_print):
             w = tb.widgetForAction(a)
             if w is not None:
                 w.setCursor(Qt.PointingHandCursor)

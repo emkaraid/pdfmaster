@@ -644,6 +644,11 @@ class DocTab(QWidget):
             self.split_doc()
         elif act == "delete":
             self.delete_pages(pids)
+        elif act == "print":
+            from .printing import print_document
+            print_document(self)
+        elif act == "optimize":
+            self.optimize_dialog()
 
     # ------------------------------------------------------------ подписи и печати
 

@@ -392,14 +392,7 @@ class PagesPanel(QWidget):
         lay.addWidget(_title("Листы"))
         self.info = _hint("")
         lay.addWidget(self.info)
-        for key, ic, text, tip in (
-                ("rot", "rotate", "Повернуть по часовой", "Повернуть выбранные листы (или текущий)"),
-                ("rotl", "rotateleft", "Повернуть против часовой", ""),
-                ("blank", "blank", "Вставить пустой лист", "После текущего листа"),
-                ("insert", "insert", "Вставить PDF или картинку…", "После текущего листа"),
-                ("extract", "extract", "Извлечь в отдельный PDF…", "Выбранные листы"),
-                ("split", "split", "Разделить документ…", "По диапазонам или каждые N листов"),
-                ("delete", "trash", "Удалить листы", "Выбранные листы (или текущий)")):
+        def btn(key, ic, text, tip):
             b = QPushButton(icons.icon(ic), "  " + text)
             b.setToolTip(tip)
             b.setProperty("listitem", True)
@@ -408,9 +401,23 @@ class PagesPanel(QWidget):
             b.setCursor(Qt.PointingHandCursor)
             b.clicked.connect(lambda _=False, k=key: self.action.emit(k))
             lay.addWidget(b)
+
+        for key, ic, text, tip in (
+                ("rot", "rotate", "Повернуть по часовой", "Повернуть выбранные листы (или текущий)"),
+                ("rotl", "rotateleft", "Повернуть против часовой", ""),
+                ("blank", "blank", "Вставить пустой лист", "После текущего листа"),
+                ("insert", "insert", "Вставить PDF или картинку…", "После текущего листа"),
+                ("extract", "extract", "Извлечь в отдельный PDF…", "Выбранные листы"),
+                ("split", "split", "Разделить документ…", "По диапазонам или каждые N листов"),
+                ("delete", "trash", "Удалить листы", "Выбранные листы (или текущий)")):
+            btn(key, ic, text, tip)
         lay.addSpacing(8)
         lay.addWidget(_hint("Порядок листов меняется перетаскиванием миниатюр. ⌘-клик и ⇧-клик — выбрать "
                             "несколько. Файлы из Finder можно бросить прямо в колонку миниатюр."))
+        lay.addSpacing(14)
+        lay.addWidget(_title("Документ"))
+        btn("print", "print", "Печать…", "Распечатать документ со всеми правками, подписями и печатями (⌘P)")
+        btn("optimize", "optimize", "Оптимизировать PDF…", "Уменьшить размер файла: картинки, шрифты, лишние данные")
         lay.addStretch(1)
 
     def set_info(self, n_sel: int, cur: int, total: int) -> None:
