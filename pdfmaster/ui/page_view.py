@@ -665,16 +665,33 @@ class PageView(QGraphicsView):
     def apply_fit(self) -> None:
         if not self.order or self.fit is None:
             return
-        vw = max(100, self.viewport().width() - 2 * 14)
-        vh = max(100, self.viewport().height() - 2 * 10)
-        if self.fit == "width":
-            maxw = max(self.items_by_pid[p].w for p in self.order)
-            z = vw / (maxw + 2 * MARGIN)
-        else:
+        # Считаем от полного размера окна просмотра, как будто полос прокрутки нет, и вычитаем
+        # полосу, только если она при этом масштабе действительно понадобится. Иначе масштаб
+        # «качается»: полоса появилась — поле уже — масштаб меньше — полоса пропала — и так без
+        # конца (лист мигает и не успевает отрисоваться).
+        vsb, hsb = self.verticalScrollBar(), self.horizontalScrollBar()
+        full_w = self.viewport().width() + (vsb.width() if vsb.isVisible() else 0)
+        full_h = self.viewport().height() + (hsb.height() if hsb.isVisible() else 0)
+        sb = max(vsb.sizeHint().width(), hsb.sizeHint().height(), 0)
+        scene = self.scene().sceneRect()
+
+        def fit_for(vw_px: float, vh_px: float) -> float:
+            vw = max(100, vw_px - 2 * 14)
+            vh = max(100, vh_px - 2 * 10)
+            if self.fit == "width":
+                maxw = max(self.items_by_pid[p].w for p in self.order)
+                return vw / (maxw + 2 * MARGIN)
             it = self.page_item_at_index(self._cur_page) or self.items_by_pid[self.order[0]]
-            z = min(vw / (it.w + 2 * MARGIN), vh / (it.h + GAP))
+            return min(vw / (it.w + 2 * MARGIN), vh / (it.h + GAP))
+
+        z = fit_for(full_w, full_h)
+        need_v = scene.height() * z > full_h + 0.5
+        need_h = scene.width() * z > full_w + 0.5
+        if need_v or need_h:
+            z = fit_for(full_w - (sb if need_v else 0), full_h - (sb if need_h else 0))
         cur = self._cur_page
-        self.set_zoom(z, keep_fit=True)
+        if abs(z - self.zoom) > 1e-4:
+            self.set_zoom(z, keep_fit=True)
         self.go_to_page(cur, smooth=False)
 
     def set_fit(self, fit: str | None) -> None:
@@ -766,7 +783,10 @@ class PageView(QGraphicsView):
     # ------------------------------------------------------------ рендер
 
     def schedule_render(self) -> None:
-        self._render_timer.start()
+        # не перезапускаем уже идущий таймер: при непрерывных изменениях (прокрутка, жест)
+        # отрисовка всё равно случится не позже чем через 40 мс, а не откладывается без конца
+        if not self._render_timer.isActive():
+            self._render_timer.start()
 
     def visible_pages(self, margin_px: float = 600) -> list[tuple[PageItem, QRectF]]:
         vr = self.mapToScene(self.viewport().rect().adjusted(0, -int(margin_px), 0, int(margin_px))).boundingRect()

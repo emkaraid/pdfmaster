@@ -20,8 +20,26 @@ def _title(text: str) -> QLabel:
     return lb
 
 
+class _WrapLabel(QLabel):
+    """Многострочная подсказка: высота по ширине, чтобы панель не сжимала её поверх кнопок
+    (в панели с прокруткой Qt иначе учитывает только однострочную минимальную высоту)."""
+
+    def _fit(self) -> None:
+        h = self.heightForWidth(self.width()) if self.text() else 0
+        if h >= 0 and h != self.minimumHeight():
+            self.setMinimumHeight(max(0, h))
+
+    def resizeEvent(self, e) -> None:
+        super().resizeEvent(e)
+        self._fit()
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self._fit()
+
+
 def _hint(text: str) -> QLabel:
-    lb = QLabel(text)
+    lb = _WrapLabel(text)
     lb.setWordWrap(True)
     lb.setProperty("role", "hint")
     return lb

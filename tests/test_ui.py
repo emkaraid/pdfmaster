@@ -433,3 +433,34 @@ def test_ui_stamp_click_does_not_repeat_after_place_or_esc(ui, fx, tmp_path):
     QTest.keyClick(view.viewport(), Qt.Key_Escape)
     pump(app, 0.1)
     assert tab.mode == "select" and tab.picked_asset() is None
+
+
+def test_ui_fit_zoom_settles_for_single_landscape_page(ui, tmp_path):
+    """Один альбомный лист A3 «по ширине»: масштаб не должен качаться из-за полосы прокрутки
+    (лист мигал и оставался пустым), а лист — отрисовываться при любом размере окна."""
+    app, ctx, win = ui
+    (tmp_path / "src").mkdir()
+    src = tmp_path / "src" / "profile_a3.pdf"
+    d = fitz.open()
+    p = d.new_page(width=1190.55, height=841.89)
+    p.insert_text((80, 80), "Продольный профиль", fontname="helv", fontsize=14)
+    p.draw_rect(fitz.Rect(40, 40, 1150, 800))
+    d.save(src)
+    tab, _ = open_copy(app, win, str(src), tmp_path)
+    view = tab.view
+    view.set_fit("width")
+    zooms = []
+    view.zoomChanged.connect(zooms.append)
+    try:
+        for h in range(560, 1000, 7):
+            win.resize(1400, h)
+            pump(app, 0.12)
+            zooms.clear()
+            pump(app, 0.25)
+            assert len(zooms) <= 1, f"масштаб качается при высоте окна {h}: {zooms[:6]}"
+            assert all(it.base is not None for it, _ in view.visible_pages(0))
+    finally:
+        view.zoomChanged.disconnect(zooms.append)
+        win.resize(1400, 900)
+        tab.model.mark_saved()
+        win.close_tab(win.tabs.indexOf(tab))
