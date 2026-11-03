@@ -9,7 +9,8 @@ VERSION = open(os.path.join(ROOT, "pdfmaster", "resources", "VERSION")).read().s
 a = Analysis(
     [os.path.join(ROOT, "packaging", "launcher.py")],
     pathex=[ROOT],
-    datas=[(os.path.join(ROOT, "pdfmaster", "resources"), "pdfmaster/resources")],
+    datas=[(os.path.join(ROOT, "pdfmaster", "resources"), "pdfmaster/resources"),
+           (os.path.join(ROOT, "build", "document.icns"), ".")],
     hiddenimports=["pillow_heif", "certifi", "PySide6.QtPrintSupport", "pdfmaster.render.worker", "pdfmaster.app"],
     excludes=["tkinter", "matplotlib", "scipy", "pandas", "IPython", "pytest", "PySide6.QtWebEngineCore",
               "PySide6.QtQml", "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtMultimedia",
@@ -57,7 +58,7 @@ app = BUNDLE(
                 "CFBundleTypeRole": "Editor",
                 "LSHandlerRank": "Alternate",
                 "LSItemContentTypes": ["com.adobe.pdf"],
-                "CFBundleTypeIconSystemGenerated": True,
+                "CFBundleTypeIconFile": "document.icns",
             },
             {
                 "CFBundleTypeName": "Изображение",

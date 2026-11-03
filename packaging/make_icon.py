@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import sys
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -84,7 +83,9 @@ def main() -> None:
     big.save(os.path.join(build, "icon.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64),
                                                      (128, 128), (256, 256)])
     if sys.platform == "darwin":
-        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", os.path.join(build, "icon.icns")], check=True)
+        # Pillow пишет ICNS напрямую, включая Retina-размеры.
+        big.save(os.path.join(build, "icon.icns"), format="ICNS")
+        big.save(os.path.join(build, "document.icns"), format="ICNS")
     print("icon ok")
 
 

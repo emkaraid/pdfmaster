@@ -19,7 +19,7 @@ from .side_panel import SidePanel
 from .thumbs import ThumbPanel
 
 PDF_FILTER = "PDF (*.pdf)"
-OPEN_FILTER = "PDF и картинки (*.pdf *.jpg *.jpeg *.png *.heic *.heif *.tif *.tiff);;PDF (*.pdf);;Все файлы (*)"
+OPEN_FILTER = "Все файлы — PDF распознаётся по содержимому (*);;PDF и картинки (*.pdf *.jpg *.jpeg *.png *.heic *.heif *.tif *.tiff);;PDF (*.pdf)"
 
 
 def ask_password(parent, name: str, wrong: bool = False) -> str | None:
